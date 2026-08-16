@@ -1,0 +1,267 @@
+<article class="card p-3">
+  <!-- Name, selection, and delete -->
+  <div class="flex items-center gap-2">
+    <input
+      class="h-6 w-6 shrink-0 accent-amber-700 dark:accent-amber-500"
+      type="checkbox"
+      [id]="'pick-' + id()"
+      [formField]="f.selected"
+    />
+    <label class="sr-only" [attr.for]="'pick-' + id()">Count {{ name() }} in the totals</label>
+
+    <input
+      class="input"
+      type="text"
+      placeholder="Name of the piece"
+      [id]="'name-' + id()"
+      [formField]="f.name"
+    />
+    <label class="sr-only" [attr.for]="'name-' + id()">Name of the piece</label>
+
+    <button
+      type="button"
+      class="btn-danger shrink-0"
+      [attr.aria-label]="'Delete ' + name()"
+      (click)="removed.emit()"
+    >
+      Delete
+    </button>
+  </div>
+
+  <!-- Karat. The three buttons are shortcuts. The field takes any karat from 1 to 24. -->
+  <div class="mt-3 flex flex-wrap items-end gap-2">
+    <div class="w-24">
+      <label class="label" [attr.for]="'karat-' + id()">Karat</label>
+      <input
+        class="input"
+        type="number"
+        inputmode="decimal"
+        step="0.5"
+        placeholder="22"
+        [id]="'karat-' + id()"
+        [formField]="f.karat"
+      />
+    </div>
+
+    <div class="segment" role="group" [attr.aria-label]="'Common karats for ' + name()">
+      @for (karat of karats; track karat) {
+        <button
+          type="button"
+          class="segment-button"
+          [attr.aria-pressed]="karat === model().karat"
+          (click)="setKarat(karat)"
+        >
+          {{ karat }}kt
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (f.karat().errors().length > 0) {
+    <p class="mt-1 text-xs text-rose-700 dark:text-rose-400" role="alert">
+      A karat runs from 1 to 24.
+    </p>
+  }
+
+  <!-- The price fields. The left column is what the shop tells you. The right column is
+       what the app works out, and every right field stays editable. -->
+  <div class="mt-3 grid grid-cols-2 gap-3">
+    <div>
+      <label class="label" [attr.for]="'weight-' + id()">Gold weight (g)</label>
+      <input
+        class="input"
+        type="number"
+        inputmode="decimal"
+        step="0.001"
+        placeholder="0"
+        [id]="'weight-' + id()"
+        [formField]="f.goldWeightGrams"
+      />
+    </div>
+
+    <div>
+      <label class="label" [attr.for]="'gold-price-' + id()">Gold price</label>
+      <input
+        class="input input-derived"
+        type="number"
+        inputmode="decimal"
+        step="1"
+        placeholder="0"
+        [id]="'gold-price-' + id()"
+        [formField]="f.goldPrice"
+      />
+    </div>
+
+    <div>
+      <label class="label" [attr.for]="'making-percent-' + id()">Making charge (%)</label>
+      <input
+        class="input"
+        type="number"
+        inputmode="decimal"
+        step="0.1"
+        placeholder="0"
+        [id]="'making-percent-' + id()"
+        [formField]="f.makingChargePercent"
+      />
+    </div>
+
+    <div>
+      <label class="label" [attr.for]="'making-amount-' + id()">Making charge</label>
+      <input
+        class="input input-derived"
+        type="number"
+        inputmode="decimal"
+        step="1"
+        placeholder="0"
+        [id]="'making-amount-' + id()"
+        [attr.aria-describedby]="canSolve() ? null : 'solve-hint-' + id()"
+        [formField]="f.makingCharge"
+      />
+    </div>
+
+    <div>
+      <label class="label" [attr.for]="'before-tax-' + id()">Price before tax</label>
+      <input
+        class="input input-derived"
+        type="number"
+        inputmode="decimal"
+        step="1"
+        placeholder="0"
+        [id]="'before-tax-' + id()"
+        [attr.aria-describedby]="canSolve() ? null : 'solve-hint-' + id()"
+        [formField]="f.priceBeforeTax"
+      />
+    </div>
+
+    <div>
+      <label class="label" [attr.for]="'after-tax-' + id()">Price after tax</label>
+      <input
+        class="input input-derived"
+        type="number"
+        inputmode="decimal"
+        step="1"
+        placeholder="0"
+        [id]="'after-tax-' + id()"
+        [attr.aria-describedby]="canSolve() ? null : 'solve-hint-' + id()"
+        [formField]="f.priceAfterTax"
+      />
+    </div>
+  </div>
+
+  <!-- Stones. A piece carries zero or more, each with its own weight and price. -->
+  <section class="mt-3">
+    <h3 class="label">Precious stones</h3>
+
+    @for (stone of f.stones; track model().stones[$index].id; let index = $index) {
+      <div class="mt-2 rounded-lg border border-stone-200 p-2 dark:border-stone-800">
+        <div class="flex items-end gap-2">
+          <div class="flex-1">
+            <label class="label" [attr.for]="'stone-kind-' + id() + '-' + index">Kind</label>
+            <input
+              class="input"
+              type="text"
+              placeholder="Diamond"
+              [id]="'stone-kind-' + id() + '-' + index"
+              [formField]="stone.kind"
+            />
+          </div>
+
+          <button
+            type="button"
+            class="btn-danger shrink-0"
+            [attr.aria-label]="'Remove stone ' + (index + 1) + ' from ' + name()"
+            (click)="removeStone(model().stones[index].id)"
+          >
+            Remove
+          </button>
+        </div>
+
+        <div class="mt-2 grid grid-cols-2 gap-2">
+          <div>
+            <label class="label" [attr.for]="'stone-weight-' + id() + '-' + index">
+              Weight (g)
+            </label>
+            <input
+              class="input"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              placeholder="0"
+              [id]="'stone-weight-' + id() + '-' + index"
+              [formField]="stone.weightGrams"
+            />
+          </div>
+
+          <div>
+            <label class="label" [attr.for]="'stone-price-' + id() + '-' + index">Price</label>
+            <input
+              class="input"
+              type="number"
+              inputmode="decimal"
+              step="1"
+              placeholder="0"
+              [id]="'stone-price-' + id() + '-' + index"
+              [formField]="stone.price"
+            />
+          </div>
+        </div>
+      </div>
+    } @empty {
+      <p class="muted text-xs">No stones. This piece is plain gold.</p>
+    }
+
+    <button
+      type="button"
+      class="btn-quiet mt-2"
+      [attr.aria-label]="'Add a stone to ' + name()"
+      (click)="addStone()"
+    >
+      Add a stone
+    </button>
+  </section>
+
+  @if (!canSolve()) {
+    <p class="muted mt-2 text-xs" [id]="'solve-hint-' + id()">{{ needsGoldPrice }}</p>
+  }
+
+  @if (isDiscount()) {
+    <p class="mt-2 text-xs font-medium text-rose-700 dark:text-rose-400">
+      Discount: the price sits below the metal cost, so the making charge is negative.
+    </p>
+  }
+
+  <!-- The read-only lines -->
+  <dl class="muted mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs tabular-nums">
+    <dt>Rate for {{ model().karat }}kt</dt>
+    <dd class="text-right">{{ price().ratePerGram | inr }}/g</dd>
+
+    <dt>Total weight, gold and stones</dt>
+    <dd class="text-right">
+      {{ price().totalWeightGrams | grams }}
+      @if (stoneCarats() > 0) {
+        <span>(stones {{ stoneCarats() }} ct)</span>
+      }
+    </dd>
+
+    <dt>Tax at {{ store.gstPercent() }}%</dt>
+    <dd class="text-right">{{ price().tax | inr: 'exact' }}</dd>
+  </dl>
+
+  <!-- Notes -->
+  <div class="mt-3">
+    <label class="label" [attr.for]="'notes-' + id()">Notes</label>
+    <textarea
+      class="input"
+      rows="2"
+      placeholder="Design, hallmark, shopkeeper's promise"
+      [id]="'notes-' + id()"
+      [formField]="f.notes"
+    ></textarea>
+  </div>
+
+  <!-- Photos -->
+  <div class="mt-3">
+    <span class="label">Photos</span>
+    <app-article-photos [articleId]="id()" [articleName]="model().name" />
+  </div>
+</article>

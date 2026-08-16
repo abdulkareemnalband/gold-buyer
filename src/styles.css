@@ -1,3 +1,83 @@
-/* You can add global styles to this file, and also import other style files */
-
 @import 'tailwindcss';
+
+/*
+  One shared set of component classes. Every colour pair below meets the WCAG AA
+  contrast minimum in both the light and the dark scheme.
+*/
+/*
+  `btn` is a utility, not a component class, because Tailwind 4 lets `@apply` reach a
+  custom utility but not a class from the same component layer.
+*/
+@utility btn {
+  @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 py-2
+    text-sm font-medium
+    focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700
+    dark:focus-visible:outline-amber-400;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-stone-200 bg-white shadow-sm dark:border-stone-800 dark:bg-stone-900;
+  }
+
+  .label {
+    @apply mb-1 block text-xs font-medium text-stone-600 dark:text-stone-400;
+  }
+
+  .input {
+    @apply block min-h-11 w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-base
+      text-stone-900 tabular-nums
+      focus-visible:border-amber-700 focus-visible:outline-2 focus-visible:outline-offset-1
+      focus-visible:outline-amber-700
+      disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500
+      dark:border-stone-700 dark:bg-stone-950 dark:text-stone-100
+      dark:focus-visible:border-amber-400 dark:focus-visible:outline-amber-400
+      dark:disabled:bg-stone-900 dark:disabled:text-stone-500;
+  }
+
+  /* A field the app calculated. The user may still type in it. */
+  .input-derived {
+    @apply border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40;
+  }
+
+  .btn-primary {
+    @apply btn bg-amber-700 text-white hover:bg-amber-800 dark:bg-amber-600 dark:text-stone-950
+      dark:hover:bg-amber-500;
+  }
+
+  .btn-quiet {
+    @apply btn border border-stone-300 bg-white text-stone-800 hover:bg-stone-100
+      dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100 dark:hover:bg-stone-800;
+  }
+
+  .btn-danger {
+    @apply btn border border-rose-300 bg-white text-rose-800 hover:bg-rose-50
+      dark:border-rose-900 dark:bg-stone-900 dark:text-rose-300 dark:hover:bg-rose-950/40;
+  }
+
+  /* A group of buttons where one choice is on. */
+  .segment {
+    @apply inline-flex rounded-lg border border-stone-300 p-0.5 dark:border-stone-700;
+  }
+
+  .segment-button {
+    @apply min-h-10 min-w-14 rounded-md px-3 text-sm font-semibold text-stone-700
+      focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-amber-700
+      dark:text-stone-300 dark:focus-visible:outline-amber-400;
+  }
+
+  .segment-button[aria-pressed='true'] {
+    @apply bg-amber-700 text-white dark:bg-amber-600 dark:text-stone-950;
+  }
+
+  .sheet {
+    @apply m-0 mt-auto w-full max-w-xl rounded-t-2xl border border-stone-200 bg-white p-4
+      text-stone-900 backdrop:bg-stone-950/50
+      dark:border-stone-800 dark:bg-stone-900 dark:text-stone-100
+      sm:mx-auto sm:my-auto sm:rounded-2xl;
+  }
+
+  .muted {
+    @apply text-stone-600 dark:text-stone-400;
+  }
+}
