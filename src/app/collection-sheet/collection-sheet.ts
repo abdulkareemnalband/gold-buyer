@@ -32,7 +32,8 @@ import { Collection } from '../core/models';
             } @else if (deletingId() === collection.id) {
               <p class="flex-1 text-sm">
                 Delete {{ collection.title }} and its
-                {{ store.articleCount(collection.id) }} items?
+                {{ store.articleCount(collection.id) }}
+                {{ store.articleCount(collection.id) === 1 ? 'item' : 'items' }}?
               </p>
               <button type="button" class="btn-danger" (click)="confirmDelete(collection)">
                 Delete
