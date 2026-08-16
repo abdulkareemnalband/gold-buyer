@@ -1,0 +1,58 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. A queued run waits, it does not cancel the running one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Angular 22 supports Node 22.22.3 and up, or Node 24.15 and up. Node 24 is the
+      # current long term release.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run test:ci
+
+      # The base href must match the repository name, because Pages serves a project
+      # site from https://<user>.github.io/gold-buyer/.
+      - run: npm run build:pages
+
+      # The app has one screen and no router, but a deep link or a refresh on an unknown
+      # path still reaches GitHub's 404 page. This copy sends it back to the app.
+      - name: Add the 404 fallback and stop Jekyll
+        run: |
+          cp dist/gold-buyer/browser/index.html dist/gold-buyer/browser/404.html
+          touch dist/gold-buyer/browser/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/gold-buyer/browser
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,4 +1,8 @@
 <article class="card p-3">
+  <!-- The name sits in an input, so a screen reader needs a heading of its own here.
+       It also puts the stones heading at the right level. -->
+  <h2 class="sr-only">{{ heading() }}</h2>
+
   <!-- Name, selection, and delete -->
   <div class="flex items-center gap-2">
     <input

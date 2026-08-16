@@ -66,6 +66,7 @@ export class ArticleCard implements OnInit {
 
   protected readonly id = computed(() => this.article().id);
   protected readonly name = computed(() => this.model().name.trim() || 'this article');
+  protected readonly heading = computed(() => this.model().name.trim() || 'Unnamed piece');
 
   /** The read-only lines under the price fields. */
   protected readonly price = computed(() =>

@@ -47,7 +47,8 @@ import { Collection } from '../core/models';
               >
                 <span class="truncate">{{ collection.title }}</span>
                 <span class="muted text-xs">
-                  {{ store.articleCount(collection.id) }} items
+                  {{ store.articleCount(collection.id) }}
+                  {{ store.articleCount(collection.id) === 1 ? 'item' : 'items' }}
                   @if (collection.id === store.activeCollection()?.id) {
                     <span class="text-amber-700 dark:text-amber-400">· open</span>
                   }
