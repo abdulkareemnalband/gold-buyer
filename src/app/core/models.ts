@@ -123,6 +123,11 @@ export interface Article {
   /** The discount the shop gives on the making charge, as a percentage from 0 to 100. */
   makingDiscountPercent: number;
   /**
+   * True when the making charge is also a percentage of the stone price. Some shops
+   * charge making on the whole piece, stones included.
+   */
+  makingOnStones: boolean;
+  /**
    * The day the customer booked the gold, as `YYYY-MM-DD`. An empty string means no
    * booking. The metal value uses the gold rate of this day. Gold only.
    */

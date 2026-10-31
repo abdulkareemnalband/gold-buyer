@@ -202,6 +202,19 @@
       </p>
     }
 
+    @if (model().stones.length > 0) {
+      <!-- Some shops charge making on the whole piece. The stone price then joins the
+           base of the making charge. -->
+      <label class="col-span-2 flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+        <input
+          class="h-5 w-5 shrink-0 accent-amber-700 dark:accent-amber-500"
+          type="checkbox"
+          [formField]="f.makingOnStones"
+        />
+        Making charge on the stone price too
+      </label>
+    }
+
     <div>
       <label class="label" [attr.for]="'before-tax-' + id()">Price before tax</label>
       <input

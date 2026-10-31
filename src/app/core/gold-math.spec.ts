@@ -38,6 +38,7 @@ const PIECE: ArticleInput = {
   weightGrams: 10,
   makingChargePercent: 12,
   makingDiscountPercent: 0,
+  makingOnStones: false,
   bookingDate: '',
   purchaseDate: '',
   stones: [RUBY],
@@ -197,6 +198,46 @@ describe('a discount on the making charge', () => {
     const price = computeArticle({ ...PIECE, makingDiscountPercent: 25 }, PRICING);
 
     expect(percentFromMakingCharge(price.makingCharge, price.netMakingBase)).toBeCloseTo(12, 9);
+  });
+});
+
+describe('a making charge on the stone price', () => {
+  it('adds the stone price to the making base', () => {
+    const price = computeArticle({ ...PIECE, makingOnStones: true }, PRICING);
+
+    expect(price.makingBase).toBe(66000 + 5000);
+    expect(price.makingCharge).toBe(8520);
+    expect(price.priceBeforeTax).toBe(66000 + 8520 + 5000);
+  });
+
+  it('takes the discount off the whole base', () => {
+    const price = computeArticle(
+      { ...PIECE, makingOnStones: true, makingDiscountPercent: 50 },
+      PRICING,
+    );
+
+    expect(price.makingCharge).toBe(4260);
+  });
+
+  it('changes nothing for a piece with no stones', () => {
+    const plain = { ...PIECE, stones: [] };
+
+    expect(computeArticle({ ...plain, makingOnStones: true }, PRICING)).toEqual(
+      computeArticle(plain, PRICING),
+    );
+  });
+
+  it('solves the percentage from the price after tax', () => {
+    const price = computeArticle({ ...PIECE, makingOnStones: true }, PRICING);
+    const percent = percentFromPriceAfterTax(
+      price.priceAfterTax,
+      price.metalPrice,
+      price.stonePrice,
+      price.netMakingBase,
+      GST,
+    );
+
+    expect(percent).toBeCloseTo(12, 9);
   });
 });
 

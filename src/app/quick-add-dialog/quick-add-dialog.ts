@@ -312,6 +312,7 @@ export class QuickAddDialog {
         weightGrams: num(piece.weightGrams),
         makingChargePercent: num(piece.makingChargePercent),
         makingDiscountPercent: 0,
+        makingOnStones: false,
         bookingDate: '',
         purchaseDate: '',
         stones: [],

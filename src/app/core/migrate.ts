@@ -52,6 +52,7 @@ export function migrateArticle(value: object): Article {
     weightGrams: number(row['weightGrams'] ?? row['goldWeightGrams']),
     makingChargePercent: number(row['makingChargePercent']),
     makingDiscountPercent: number(row['makingDiscountPercent']),
+    makingOnStones: row['makingOnStones'] === true,
     bookingDate: day(row['bookingDate']),
     purchaseDate: day(row['purchaseDate']),
     stones: list(row['stones']).map(migrateStone),

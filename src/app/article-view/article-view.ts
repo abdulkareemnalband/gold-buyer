@@ -230,6 +230,9 @@ import { formatDay } from '../core/dates';
             of {{ price().purchaseRate.perGram | inr: 'exact' }}/g{{
               onDay(price().purchaseRate.date)
             }}
+            @if (article().makingOnStones && price().stonePrice > 0) {
+              + stones {{ price().stonePrice | inr }}
+            }
           </span>
         </dt>
         <dd class="text-right">{{ price().grossMakingCharge | inr }}</dd>

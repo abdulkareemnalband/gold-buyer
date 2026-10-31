@@ -32,6 +32,8 @@ export interface ArticleInput {
   makingChargePercent: number;
   /** The discount on the making charge, from 0 to 100. */
   makingDiscountPercent: number;
+  /** True when the making charge also applies to the stone price. */
+  makingOnStones: boolean;
   /** Gold only. An empty string means no booking. */
   bookingDate: string;
   /** Gold only. An empty string means the booking date. */
@@ -204,7 +206,10 @@ export interface ArticlePrice {
   /** The rate that sets the making charge. */
   purchaseRate: MetalRate;
   metalPrice: number;
-  /** The metal weight at the purchase rate. The making charge is a percentage of this. */
+  /**
+   * The metal weight at the purchase rate, plus the stone price when the making charge
+   * applies to stones. The making charge is a percentage of this.
+   */
   makingBase: number;
   /**
    * The making base less the discount. The making charge after the discount is a
@@ -232,7 +237,7 @@ export function computeArticle(article: ArticleInput, pricing: Pricing): Article
   const stones = stoneTotals(resolveStones(article.stones, pricing.stoneRates));
 
   const metalPrice = weight * value.perGram;
-  const makingBase = weight * purchase.perGram;
+  const makingBase = weight * purchase.perGram + (article.makingOnStones ? stones.price : 0);
   const discount = Math.min(100, Math.max(0, finite(article.makingDiscountPercent)));
   const netMakingBase = makingBase * (1 - discount / 100);
   const grossMakingCharge = (finite(article.makingChargePercent) / 100) * makingBase;

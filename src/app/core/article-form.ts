@@ -29,6 +29,7 @@ export interface ArticleForm {
   weightGrams: number;
   makingChargePercent: number;
   makingDiscountPercent: number;
+  makingOnStones: boolean;
   /** Gold only. `YYYY-MM-DD`, or empty for no booking. */
   bookingDate: string;
   /** Gold only. `YYYY-MM-DD`, or empty to use the booking date. */
@@ -70,6 +71,7 @@ export function formToPriceInput(form: ArticleForm) {
     weightGrams: num(form.weightGrams),
     makingChargePercent: num(form.makingChargePercent),
     makingDiscountPercent: num(form.makingDiscountPercent),
+    makingOnStones: form.makingOnStones,
     bookingDate: form.bookingDate,
     purchaseDate: form.purchaseDate,
     stones: form.stones,
@@ -86,6 +88,7 @@ export function articleToForm(article: Article, pricing: Pricing): ArticleForm {
     weightGrams: article.weightGrams,
     makingChargePercent: article.makingChargePercent,
     makingDiscountPercent: article.makingDiscountPercent,
+    makingOnStones: article.makingOnStones,
     bookingDate: article.bookingDate,
     purchaseDate: article.purchaseDate,
     stones: resolveStones(article.stones, pricing.stoneRates),
@@ -110,6 +113,7 @@ export function formToArticlePatch(form: ArticleForm): Partial<Article> {
     weightGrams: num(form.weightGrams),
     makingChargePercent: num(form.makingChargePercent),
     makingDiscountPercent: num(form.makingDiscountPercent),
+    makingOnStones: form.makingOnStones,
     bookingDate: form.bookingDate,
     purchaseDate: form.purchaseDate,
     stones: form.stones.map((stone) => ({
@@ -175,6 +179,7 @@ export const BLANK_FORM: ArticleForm = {
   weightGrams: 0,
   makingChargePercent: 0,
   makingDiscountPercent: 0,
+  makingOnStones: false,
   bookingDate: '',
   purchaseDate: '',
   stones: [],

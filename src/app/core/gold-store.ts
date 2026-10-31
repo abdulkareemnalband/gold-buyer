@@ -279,6 +279,7 @@ export class GoldStore {
       weightGrams: Math.max(0, safe(start.weightGrams ?? 0)),
       makingChargePercent: safe(start.makingChargePercent ?? 0),
       makingDiscountPercent: 0,
+      makingOnStones: false,
       bookingDate: '',
       purchaseDate: '',
       stones: [],
