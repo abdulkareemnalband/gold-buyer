@@ -73,7 +73,11 @@
     (editShop)="openShopDialog('edit')"
   />
 
-  <app-quick-add-dialog [open]="quickAddOpen()" (closed)="quickAddOpen.set(false)" />
+  <app-quick-add-dialog
+    [open]="quickAddOpen()"
+    (closed)="quickAddOpen.set(false)"
+    (moreOptions)="edit($event)"
+  />
 
   <!-- One dialog adds a shop and edits the details of a shop. -->
   <app-shop-dialog

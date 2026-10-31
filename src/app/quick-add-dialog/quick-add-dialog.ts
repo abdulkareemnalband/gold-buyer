@@ -23,12 +23,13 @@ const quickSchema = schema<NewArticle>((piece) => {
 
 /**
  * A short form for a new piece, built for a phone at the counter. It asks only for what
- * sets the price: metal, karat, weight, and making charge. The name is optional. Stones,
- * dates, the discount, and the barcode stay in edit mode.
+ * sets the price: metal, karat, weight, and making charge. The name is optional. More
+ * options adds the piece and opens it in edit mode, which has the stones, the dates, the
+ * discount, and the barcode.
  *
- * The weight field takes the focus, so the number keyboard opens at once. Add and next
- * keeps the metal, the karat, and the making charge, because pieces from one tray often
- * share them.
+ * The weight field takes the focus, so the number keyboard opens at once. The dialog
+ * keeps the last metal, karat, and making charge, because pieces in one shop often share
+ * them.
  */
 @Component({
   selector: 'app-quick-add-dialog',
@@ -40,7 +41,7 @@ const quickSchema = schema<NewArticle>((piece) => {
       aria-labelledby="quick-add-title"
       (close)="closed.emit()"
     >
-      <form (submit)="add($event, false)">
+      <form (submit)="add($event)">
         <h2 id="quick-add-title" class="mb-3 text-lg font-semibold">Add a piece</h2>
 
         <span class="label" id="quick-metal-label">Metal</span>
@@ -137,18 +138,11 @@ const quickSchema = schema<NewArticle>((piece) => {
             {{ price().priceAfterTax | inr }}
           </span>
         </p>
-        @if (added() > 0) {
-          <p class="muted text-xs" role="status">
-            {{ added() }} {{ added() === 1 ? 'piece' : 'pieces' }} added
-          </p>
-        }
 
         <div class="sheet-footer">
           <button type="submit" class="btn-primary flex-1">Add</button>
-          <button type="button" class="btn-quiet flex-1" (click)="add($event, true)">
-            Add &amp; next
-          </button>
-          <button type="button" class="btn-quiet" (click)="closed.emit()">Close</button>
+          <button type="button" class="btn-quiet" (click)="add($event, true)">More options</button>
+          <button type="button" class="btn-quiet" (click)="closed.emit()">Cancel</button>
         </div>
       </form>
     </dialog>
@@ -157,13 +151,18 @@ const quickSchema = schema<NewArticle>((piece) => {
 export class QuickAddDialog {
   readonly open = input.required<boolean>();
   readonly closed = output<void>();
+  /** The user asked for more options. The value is the id of the new piece to edit. */
+  readonly moreOptions = output<string>();
 
   protected readonly store = inject(GoldStore);
   protected readonly metals = METALS;
   protected readonly metalNames = METAL_NAMES;
   protected readonly karats = KARATS;
 
-  /** The model keeps the metal, the karat, and the making charge between pieces. */
+  /**
+   * The model keeps the metal, the karat, and the making charge for the next piece. The
+   * weight and the name start empty each time.
+   */
   protected readonly model = signal<NewArticle>({
     name: '',
     metal: 'gold',
@@ -172,9 +171,6 @@ export class QuickAddDialog {
     makingChargePercent: Number.NaN,
   });
   protected readonly f = form(this.model, quickSchema);
-
-  /** How many pieces this dialog added since it opened. */
-  protected readonly added = signal(0);
 
   protected readonly price = computed(() => {
     const piece = this.model();
@@ -202,7 +198,6 @@ export class QuickAddDialog {
 
       if (this.open()) {
         if (!dialog.open) {
-          this.added.set(0);
           dialog.showModal();
           this.weightField().nativeElement.focus();
         }
@@ -221,10 +216,10 @@ export class QuickAddDialog {
   }
 
   /**
-   * Add the piece. With `next`, clear the weight and the name, keep the rest, and move
-   * the focus back to the weight. Without it, close the dialog.
+   * Add the piece and close. With `more`, the shell then opens the piece in edit mode,
+   * which has every field. The weight and the name clear for the next piece.
    */
-  protected add(event: Event, next: boolean): void {
+  protected add(event: Event, more = false): void {
     event.preventDefault();
 
     if (this.f.karat().errors().length > 0) {
@@ -232,19 +227,17 @@ export class QuickAddDialog {
     }
 
     const piece = this.model();
-    this.store.addArticle({
+    const article = this.store.addArticle({
       ...piece,
       karat: piece.metal === 'gold' ? piece.karat : this.store.displayKarat(),
       weightGrams: num(piece.weightGrams),
       makingChargePercent: num(piece.makingChargePercent),
     });
-    this.added.update((count) => count + 1);
     this.model.update((current) => ({ ...current, name: '', weightGrams: Number.NaN }));
+    this.closed.emit();
 
-    if (next) {
-      this.weightField().nativeElement.focus();
-    } else {
-      this.closed.emit();
+    if (more && article) {
+      this.moreOptions.emit(article.id);
     }
   }
 }
