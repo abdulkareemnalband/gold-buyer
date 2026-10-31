@@ -191,13 +191,8 @@ import { formatDay } from '../core/dates';
         <p class="mt-2 text-xs text-rose-700 dark:text-rose-400" role="alert">{{ failed() }}</p>
       }
 
-      @if (article().barcode) {
-        <app-barcode-image
-          class="mt-3"
-          [value]="article().barcode"
-          [format]="article().barcodeFormat"
-          [label]="name()"
-        />
+      @if (article().barcode.data) {
+        <app-barcode-image class="mt-3" [barcode]="article().barcode" [label]="name()" />
       }
 
       @if (photos().length > 0) {
@@ -411,10 +406,7 @@ export class ArticleView {
     try {
       const scanned = await this.barcodes.read(photo);
       if (scanned) {
-        this.store.patchArticle(this.article().id, {
-          barcode: scanned.value,
-          barcodeFormat: scanned.format,
-        });
+        this.store.patchArticle(this.article().id, { barcode: scanned });
       } else {
         this.scanError.set(NO_BARCODE);
       }

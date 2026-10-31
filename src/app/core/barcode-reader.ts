@@ -1,4 +1,5 @@
 import { Service } from '@angular/core';
+import { Barcode, DEFAULT_BARCODE_TYPE } from './models';
 
 /**
  * Reads a barcode from a camera photo, and draws a barcode from a stored value.
@@ -12,8 +13,31 @@ import { Service } from '@angular/core';
 /** The message when a photo shows no barcode that the reader can decode. */
 export const NO_BARCODE = 'No barcode found. Take the photo again, close up and in focus.';
 
-/** The format for a value with no scanned format, such as a typed value. */
-const DEFAULT_FORMAT = 'code128';
+/** The formats a user can pick for a typed value. A scan can set any of them. */
+export const BARCODE_TYPES: readonly { id: string; label: string }[] = [
+  { id: 'code128', label: 'Code 128' },
+  { id: 'qrcode', label: 'QR code' },
+  { id: 'ean13', label: 'EAN-13' },
+  { id: 'ean8', label: 'EAN-8' },
+  { id: 'upca', label: 'UPC-A' },
+  { id: 'upce', label: 'UPC-E' },
+  { id: 'code39', label: 'Code 39' },
+  { id: 'code93', label: 'Code 93' },
+  { id: 'interleaved2of5', label: 'ITF' },
+  { id: 'rationalizedCodabar', label: 'Codabar' },
+  { id: 'datamatrix', label: 'Data Matrix' },
+  { id: 'pdf417', label: 'PDF417' },
+  { id: 'azteccode', label: 'Aztec' },
+  { id: 'databaromni', label: 'GS1 DataBar' },
+  { id: 'databarexpanded', label: 'GS1 DataBar Expanded' },
+  { id: 'maxicode', label: 'MaxiCode' },
+];
+
+/** The name of a barcode type for a label, such as QR code. */
+export function barcodeTypeName(type: string): string {
+  const id = type || DEFAULT_BARCODE_TYPE;
+  return BARCODE_TYPES.find((one) => one.id === id)?.label ?? id;
+}
 
 /**
  * The zxing format name and the matching `bwip-js` symbology. A scan stores the
@@ -29,14 +53,17 @@ const FORMATS: Record<string, string> = {
   EAN_8: 'ean8',
   EAN_13: 'ean13',
   ITF: 'interleaved2of5',
+  MAXICODE: 'maxicode',
   PDF_417: 'pdf417',
   QR_CODE: 'qrcode',
+  RSS_14: 'databaromni',
+  RSS_EXPANDED: 'databarexpanded',
   UPC_A: 'upca',
   UPC_E: 'upce',
 };
 
 /** The two-dimensional formats. They draw square, with no text under them. */
-const MATRIX_FORMATS = new Set(['azteccode', 'datamatrix', 'qrcode', 'pdf417']);
+const MATRIX_FORMATS = new Set(['azteccode', 'datamatrix', 'maxicode', 'qrcode', 'pdf417']);
 
 /**
  * The longest side, in pixels, of each read attempt. A smaller photo reads faster. A
@@ -44,16 +71,10 @@ const MATRIX_FORMATS = new Set(['azteccode', 'datamatrix', 'qrcode', 'pdf417']);
  */
 const READ_SIZES = [1600, 1000, 2400];
 
-export interface ScannedBarcode {
-  value: string;
-  /** The `bwip-js` symbology, such as `code128` or `qrcode`. */
-  format: string;
-}
-
 @Service()
 export class BarcodeReader {
   /** The first barcode in the photo, or null when the photo shows none. */
-  async read(photo: Blob): Promise<ScannedBarcode | null> {
+  async read(photo: Blob): Promise<Barcode | null> {
     const zxing = await import('@zxing/library');
     const bitmap = await createImageBitmap(photo);
 
@@ -69,7 +90,7 @@ export class BarcodeReader {
         try {
           const result = reader.decode(image);
           const name = zxing.BarcodeFormat[result.getBarcodeFormat()];
-          return { value: result.getText(), format: FORMATS[name] ?? DEFAULT_FORMAT };
+          return { data: result.getText(), type: FORMATS[name] ?? DEFAULT_BARCODE_TYPE };
         } catch {
           // zxing throws when it finds no code. Try the next size.
         } finally {
@@ -83,39 +104,36 @@ export class BarcodeReader {
   }
 
   /**
-   * An SVG data URL of the barcode, or null when no format can draw the value.
-   *
-   * A value that does not fit its format, such as a typed value with letters under an
-   * EAN-13 format, falls back to Code 128, which takes any text.
+   * An SVG data URL of the barcode in its own type, or null when the data does not fit
+   * that type, such as letters under EAN-13. The type never changes in silence, because
+   * a tag in another format would not match the records of the shop.
    */
-  async render(value: string, format: string): Promise<string | null> {
-    const text = value.trim();
+  async render(barcode: Barcode): Promise<string | null> {
+    const text = barcode.data.trim();
 
     if (!text) {
       return null;
     }
 
     const bwip = await import('bwip-js/browser');
-    const formats = [...new Set([format || DEFAULT_FORMAT, DEFAULT_FORMAT])];
+    const bcid = barcode.type || DEFAULT_BARCODE_TYPE;
+    const matrix = MATRIX_FORMATS.has(bcid);
 
-    for (const bcid of formats) {
-      try {
-        const matrix = MATRIX_FORMATS.has(bcid);
-        const svg = bwip.toSVG({
-          bcid,
-          text,
-          scale: 3,
-          height: matrix ? undefined : 12,
-          includetext: !matrix,
-          textxalign: 'center',
-          paddingwidth: 4,
-          paddingheight: 4,
-          backgroundcolor: 'FFFFFF',
-        });
-        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-      } catch {
-        // The value does not fit this format. Try the next one.
-      }
+    try {
+      const svg = bwip.toSVG({
+        bcid,
+        text,
+        scale: 3,
+        height: matrix ? undefined : 12,
+        includetext: !matrix,
+        textxalign: 'center',
+        paddingwidth: 4,
+        paddingheight: 4,
+        backgroundcolor: 'FFFFFF',
+      });
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    } catch {
+      // The data does not fit the type.
     }
     return null;
   }

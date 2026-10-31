@@ -92,19 +92,28 @@ export interface Stone {
   price: number;
 }
 
+/** The format of a new barcode. Code 128 takes any typed text. */
+export const DEFAULT_BARCODE_TYPE = 'code128';
+
+/** A barcode on the tag of a piece. The app keeps the value and the type, never a photo. */
+export interface Barcode {
+  /** The value the barcode holds. An empty string means no barcode. */
+  data: string;
+  /**
+   * The `bwip-js` symbology, such as `qrcode` or `ean13`. A scan sets it to the format
+   * of the tag. The user picks it for a typed value.
+   */
+  type: string;
+}
+
 /** One piece of jewellery inside a collection. */
 export interface Article {
   id: string;
   collectionId: string;
   name: string;
   notes: string;
-  /** The barcode on the tag of the piece. An empty string means none. */
-  barcode: string;
-  /**
-   * The `bwip-js` symbology of the barcode, such as `ean13` or `qrcode`. A scan sets it.
-   * An empty string means Code 128, which takes any typed value.
-   */
-  barcodeFormat: string;
+  /** The barcode on the tag of the piece. Empty `data` means none. */
+  barcode: Barcode;
   metal: Metal;
   /** Any karat from 1 to 24, not only the three on the rate board. Gold only. */
   karat: number;

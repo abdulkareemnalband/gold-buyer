@@ -1,7 +1,9 @@
 import { isoDay } from './dates';
 import {
   Article,
+  Barcode,
   Collection,
+  DEFAULT_BARCODE_TYPE,
   GoldRate,
   Metal,
   METALS,
@@ -43,8 +45,7 @@ export function migrateArticle(value: object): Article {
     collectionId: String(row['collectionId']),
     name: String(row['name'] ?? ''),
     notes: String(row['notes'] ?? ''),
-    barcode: String(row['barcode'] ?? ''),
-    barcodeFormat: String(row['barcodeFormat'] ?? ''),
+    barcode: migrateBarcode(row),
     metal: METALS.includes(row['metal'] as Metal) ? (row['metal'] as Metal) : 'gold',
     karat: number(row['karat'], 22),
     // Version 1 called the metal weight `goldWeightGrams`.
@@ -85,6 +86,27 @@ function migrateGoldRates(row: Row): GoldRate[] {
       rate: price24,
     },
   ];
+}
+
+/**
+ * The barcode as one object. The first barcode version kept the value in `barcode` and
+ * the format in `barcodeFormat`.
+ */
+function migrateBarcode(row: Row): Barcode {
+  const value = row['barcode'];
+
+  if (value && typeof value === 'object') {
+    const barcode = value as Row;
+    return {
+      data: String(barcode['data'] ?? ''),
+      type: String(barcode['type'] || DEFAULT_BARCODE_TYPE),
+    };
+  }
+
+  return {
+    data: typeof value === 'string' ? value : '',
+    type: String(row['barcodeFormat'] || DEFAULT_BARCODE_TYPE),
+  };
 }
 
 function migrateStone(row: Row): Stone {

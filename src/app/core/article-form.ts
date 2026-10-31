@@ -1,4 +1,4 @@
-import { Article, Metal, Stone } from './models';
+import { Article, Barcode, DEFAULT_BARCODE_TYPE, Metal, Stone } from './models';
 import {
   computeArticle,
   percentFromMakingCharge,
@@ -22,8 +22,7 @@ export interface ArticleForm {
   // Source fields. The user owns these.
   name: string;
   notes: string;
-  barcode: string;
-  barcodeFormat: string;
+  barcode: Barcode;
   metal: Metal;
   /** Any karat from 1 to 24. Gold only. */
   karat: number;
@@ -82,7 +81,6 @@ export function articleToForm(article: Article, pricing: Pricing): ArticleForm {
     name: article.name,
     notes: article.notes,
     barcode: article.barcode,
-    barcodeFormat: article.barcodeFormat,
     metal: article.metal,
     karat: article.karat,
     weightGrams: article.weightGrams,
@@ -106,8 +104,7 @@ export function formToArticlePatch(form: ArticleForm): Partial<Article> {
   return {
     name: form.name,
     notes: form.notes,
-    barcode: form.barcode.trim(),
-    barcodeFormat: form.barcodeFormat,
+    barcode: { data: form.barcode.data.trim(), type: form.barcode.type },
     metal: form.metal,
     karat: form.karat,
     weightGrams: num(form.weightGrams),
@@ -172,8 +169,7 @@ function withDerived(source: ArticleForm, pricing: Pricing): ArticleForm {
 export const BLANK_FORM: ArticleForm = {
   name: '',
   notes: '',
-  barcode: '',
-  barcodeFormat: '',
+  barcode: { data: '', type: DEFAULT_BARCODE_TYPE },
   metal: 'gold',
   karat: 22,
   weightGrams: 0,
@@ -196,7 +192,11 @@ export function newStone(): Stone {
 /** True when the two models hold the same value in every field. */
 export function sameForm(a: ArticleForm, b: ArticleForm): boolean {
   return (Object.keys(a) as (keyof ArticleForm)[]).every((key) =>
-    key === 'stones' ? sameStones(a.stones, b.stones) : Object.is(a[key], b[key]),
+    key === 'stones'
+      ? sameStones(a.stones, b.stones)
+      : key === 'barcode'
+        ? sameBarcode(a.barcode, b.barcode)
+        : Object.is(a[key], b[key]),
   );
 }
 
@@ -220,8 +220,15 @@ export function sameSource(a: ArticleForm, b: ArticleForm): boolean {
     if (key === 'stones') {
       return sameStones(a.stones, b.stones);
     }
+    if (key === 'barcode') {
+      return sameBarcode(a.barcode, b.barcode);
+    }
     return Object.is(a[key], b[key]);
   });
+}
+
+function sameBarcode(a: Barcode, b: Barcode): boolean {
+  return a === b || (a.data === b.data && a.type === b.type);
 }
 
 function sameStones(a: readonly Stone[], b: readonly Stone[]): boolean {

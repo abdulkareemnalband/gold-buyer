@@ -6,6 +6,7 @@ import { migrateArticle, migrateCollection } from './migrate';
 import {
   Article,
   Collection,
+  DEFAULT_BARCODE_TYPE,
   DEFAULT_GST_PERCENT,
   GoldRate,
   Karat,
@@ -264,8 +265,7 @@ export class GoldStore {
       collectionId: collection.id,
       name: '',
       notes: '',
-      barcode: '',
-      barcodeFormat: '',
+      barcode: { data: '', type: DEFAULT_BARCODE_TYPE },
       metal: 'gold',
       karat: collection.displayKarat,
       weightGrams: 0,
@@ -526,8 +526,17 @@ function same(article: Article, patch: Partial<Article>): boolean {
       );
     }
 
+    // The barcode is a small object. Compare it by its values, like a stone.
+    if (isPlainObject(before) && isPlainObject(after)) {
+      return shallowEqual(before, after);
+    }
+
     return Object.is(before, after);
   });
+}
+
+function isPlainObject(value: unknown): value is object {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function shallowEqual(a: unknown, b: unknown): boolean {

@@ -400,7 +400,8 @@
     <dd class="text-right">{{ price().tax | inr: 'exact' }}</dd>
   </dl>
 
-  <!-- Barcode. Type it, or scan it from a camera photo. The photo is not kept. -->
+  <!-- Barcode. Type the data and pick the format, or scan the tag with the camera. A
+       scan sets the format of the tag. The photo is not kept. -->
   <div class="mt-3">
     <label class="label" [attr.for]="'barcode-' + id()">Barcode</label>
     <div class="flex gap-2">
@@ -410,8 +411,7 @@
         autocomplete="off"
         placeholder="Type or scan"
         [id]="'barcode-' + id()"
-        [formField]="f.barcode"
-        (input)="clearBarcodeFormat()"
+        [formField]="f.barcode.data"
       />
       <button
         type="button"
@@ -433,16 +433,19 @@
         (change)="scan($event)"
       />
     </div>
+    <div class="mt-2">
+      <label class="label" [attr.for]="'barcode-type-' + id()">Format</label>
+      <select class="input" [id]="'barcode-type-' + id()" [formField]="f.barcode.type">
+        @for (type of barcodeTypes; track type.id) {
+          <option [value]="type.id">{{ type.label }}</option>
+        }
+      </select>
+    </div>
     @if (scanError()) {
       <p class="mt-1 text-xs text-rose-700 dark:text-rose-400" role="alert">{{ scanError() }}</p>
     }
-    @if (model().barcode.trim()) {
-      <app-barcode-image
-        class="mt-2"
-        [value]="model().barcode"
-        [format]="model().barcodeFormat"
-        [label]="name()"
-      />
+    @if (model().barcode.data.trim()) {
+      <app-barcode-image class="mt-2" [barcode]="model().barcode" [label]="name()" />
     }
   </div>
 

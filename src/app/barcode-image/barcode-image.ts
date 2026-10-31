@@ -1,8 +1,10 @@
-import { Component, effect, inject, input, signal } from '@angular/core';
-import { BarcodeReader } from '../core/barcode-reader';
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
+import { barcodeTypeName, BarcodeReader } from '../core/barcode-reader';
+import { Barcode } from '../core/models';
 
 /**
- * A barcode drawn from its stored value. The app never keeps the photo of the tag.
+ * A barcode drawn from its data, in its own type. The app never keeps the photo of the
+ * tag.
  *
  * The drawing is an SVG data URL, so `NgOptimizedImage` cannot serve it. The image sits
  * on white in both colour schemes, because a scanner needs dark bars on a light ground.
@@ -18,42 +20,42 @@ import { BarcodeReader } from '../core/barcode-reader';
         <img
           class="block h-auto max-h-32 w-auto max-w-full"
           [src]="src"
-          [alt]="'Barcode of ' + label() + ': ' + value()"
+          [alt]="typeName() + ' of ' + label() + ': ' + barcode().data"
           decoding="async"
         />
         <figcaption class="px-1 pt-1 text-center text-xs break-all text-stone-700 tabular-nums">
-          {{ value() }}
+          {{ typeName() }} · {{ barcode().data }}
         </figcaption>
       </figure>
     } @else if (failed()) {
-      <p class="muted text-xs break-all">Barcode {{ value() }}. It cannot be drawn.</p>
+      <p class="text-xs break-all text-rose-700 dark:text-rose-400">
+        {{ barcode().data }} does not fit the {{ typeName() }} format.
+      </p>
     }
   `,
 })
 export class BarcodeImage {
-  readonly value = input.required<string>();
-  /** The `bwip-js` symbology. An empty string draws Code 128. */
-  readonly format = input('');
+  readonly barcode = input.required<Barcode>();
   readonly label = input('this article');
 
   private readonly barcodes = inject(BarcodeReader);
   protected readonly url = signal<string | null>(null);
   protected readonly failed = signal(false);
+  protected readonly typeName = computed(() => barcodeTypeName(this.barcode().type));
 
-  /** Counts the draws. A late result from an older value must not replace a newer one. */
+  /** Counts the draws. A late result from an older barcode must not replace a newer one. */
   private draw = 0;
 
   constructor() {
     effect(() => {
-      const value = this.value();
-      const format = this.format();
+      const barcode = this.barcode();
       const draw = ++this.draw;
 
-      this.barcodes.render(value, format).then(
+      this.barcodes.render(barcode).then(
         (url) => {
           if (draw === this.draw) {
             this.url.set(url);
-            this.failed.set(url === null && value.trim() !== '');
+            this.failed.set(url === null && barcode.data.trim() !== '');
           }
         },
         () => {

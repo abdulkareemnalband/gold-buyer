@@ -26,7 +26,7 @@ import {
   sameForm,
   sameSource,
 } from '../core/article-form';
-import { BarcodeReader, NO_BARCODE } from '../core/barcode-reader';
+import { BARCODE_TYPES, BarcodeReader, NO_BARCODE } from '../core/barcode-reader';
 import { GoldStore } from '../core/gold-store';
 import { computeArticle, Pricing, rate24, ratePerGram, stoneTotals } from '../core/gold-math';
 import { formatDay } from '../core/dates';
@@ -65,6 +65,7 @@ export class ArticleCard implements OnInit {
 
   protected readonly store = inject(GoldStore);
   protected readonly barcodes = inject(BarcodeReader);
+  protected readonly barcodeTypes = BARCODE_TYPES;
   protected readonly scanning = signal(false);
   protected readonly scanError = signal('');
   protected readonly karats = KARATS;
@@ -214,11 +215,7 @@ export class ArticleCard implements OnInit {
     try {
       const scanned = await this.barcodes.read(photo);
       if (scanned) {
-        this.model.update((current) => ({
-          ...current,
-          barcode: scanned.value,
-          barcodeFormat: scanned.format,
-        }));
+        this.model.update((current) => ({ ...current, barcode: scanned }));
       } else {
         this.scanError.set(NO_BARCODE);
       }
@@ -226,13 +223,6 @@ export class ArticleCard implements OnInit {
       this.scanError.set(NO_BARCODE);
     } finally {
       this.scanning.set(false);
-    }
-  }
-
-  /** A typed value has no scanned format, so it draws as Code 128. */
-  protected clearBarcodeFormat(): void {
-    if (this.model().barcodeFormat) {
-      this.model.update((current) => ({ ...current, barcodeFormat: '' }));
     }
   }
 
