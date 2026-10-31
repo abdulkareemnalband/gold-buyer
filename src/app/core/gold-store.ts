@@ -205,6 +205,46 @@ export class GoldStore {
     }
   }
 
+  /**
+   * Copy one collection with its rates, its articles, and their photos. The copy becomes
+   * the active collection.
+   *
+   * Every row gets a new id. A copied stone links to the copy of its stone rate, so a
+   * rate change in one shop does not touch the other.
+   */
+  duplicateCollection(id: string): Collection | undefined {
+    const source = this.collectionsState().find((one) => one.id === id);
+
+    if (!source) {
+      return undefined;
+    }
+
+    const rateIds = new Map(source.stoneRates.map((rate) => [rate.id, crypto.randomUUID()]));
+    const now = Date.now();
+    const collection: Collection = {
+      ...source,
+      id: crypto.randomUUID(),
+      title: `${source.title} (copy)`,
+      goldRates: source.goldRates.map((rate) => ({ ...rate, id: crypto.randomUUID() })),
+      stoneRates: source.stoneRates.map((rate) => ({ ...rate, id: rateIds.get(rate.id)! })),
+      createdAt: now,
+    };
+
+    this.collectionsState.update((all) => [...all, collection]);
+    this.schedule(`collection:${collection.id}`, () => db.putCollection(collection));
+
+    // The step of one millisecond keeps the copies in the order of the originals.
+    this.articlesState()
+      .filter((article) => article.collectionId === id)
+      .sort((a, b) => a.createdAt - b.createdAt)
+      .forEach((article, index) =>
+        this.copyArticle(article, collection.id, rateIds, article.name, now + index),
+      );
+
+    this.setActiveCollection(collection.id);
+    return collection;
+  }
+
   /** How many articles a delete would take with it. */
   articleCount(collectionId: string): number {
     return this.articlesState().filter((article) => article.collectionId === collectionId).length;
@@ -240,6 +280,18 @@ export class GoldStore {
     this.schedule(`article:${article.id}`, () => db.putArticle(article));
 
     return article;
+  }
+
+  /** Copy one article, with its photos, into the same collection. The copy goes last. */
+  duplicateArticle(id: string): Article | undefined {
+    const source = this.articlesState().find((article) => article.id === id);
+
+    if (!source) {
+      return undefined;
+    }
+
+    const name = `${source.name.trim() || 'Unnamed piece'} (copy)`;
+    return this.copyArticle(source, source.collectionId, new Map(), name, Date.now());
   }
 
   /**
@@ -278,6 +330,37 @@ export class GoldStore {
     await this.flush();
     const imageIds = await db.deleteArticleDeep(id);
     this.images.forget(imageIds, [id]);
+  }
+
+  /**
+   * Add a copy of one article with a new id. `rateIds` maps an old stone rate id to the
+   * id of its copy. A stone rate that is not in the map keeps its id.
+   */
+  private copyArticle(
+    source: Article,
+    collectionId: string,
+    rateIds: ReadonlyMap<string, string>,
+    name: string,
+    createdAt: number,
+  ): Article {
+    const article: Article = {
+      ...source,
+      id: crypto.randomUUID(),
+      collectionId,
+      name,
+      stones: source.stones.map((stone) => ({
+        ...stone,
+        id: crypto.randomUUID(),
+        rateId: rateIds.get(stone.rateId) ?? stone.rateId,
+      })),
+      createdAt,
+    };
+
+    this.articlesState.update((all) => [...all, article]);
+    this.schedule(`article:${article.id}`, () => db.putArticle(article));
+    void this.images.copy(source.id, article.id);
+
+    return article;
   }
 
   // --- Loading and writing -------------------------------------------------------

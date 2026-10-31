@@ -59,6 +59,15 @@ export class App {
     this.editingId.set(null);
   }
 
+  /** The copy opens in edit mode, so the user can change what differs. */
+  protected duplicate(id: string): void {
+    const copy = this.store.duplicateArticle(id);
+
+    if (copy) {
+      this.editingId.set(copy.id);
+    }
+  }
+
   protected remove(id: string): void {
     this.editingId.set(null);
     void this.store.removeArticle(id);

@@ -84,6 +84,29 @@ export class ImageStore {
     }
   }
 
+  /**
+   * Copy every photo of one article to another. IndexedDB keeps its own copy of each
+   * blob, so a delete of one photo leaves the other.
+   *
+   * The list of the new article exists before the first await. A card that asks for the
+   * photos meanwhile then gets this list, and does not start a second read that could
+   * overwrite it.
+   */
+  async copy(fromArticleId: string, toArticleId: string): Promise<void> {
+    const list = this.listFor(toArticleId);
+    const images = await db.loadImages(fromArticleId);
+    const copies = images.map((image) => ({
+      ...image,
+      id: crypto.randomUUID(),
+      articleId: toArticleId,
+    }));
+
+    for (const copy of copies) {
+      await db.putImage(copy);
+    }
+    list.update((current) => [...current, ...copies]);
+  }
+
   async remove(image: ArticleImage): Promise<void> {
     await db.deleteImage(image.id);
     this.listFor(image.articleId).update((images) => images.filter((one) => one.id !== image.id));

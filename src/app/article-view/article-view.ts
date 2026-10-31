@@ -2,6 +2,7 @@ import {
   afterNextRender,
   Component,
   computed,
+  effect,
   ElementRef,
   inject,
   input,
@@ -24,6 +25,7 @@ import { formatDay } from '../core/dates';
  */
 @Component({
   selector: 'app-article-view',
+  host: { '(document:click)': 'onDocumentClick($event)' },
   imports: [InrPipe, GramsPipe, PhotoViewer],
   template: `
     <article class="card p-3" [attr.aria-labelledby]="'view-title-' + article().id">
@@ -60,6 +62,43 @@ import { formatDay } from '../core/dates';
         >
           Edit
         </button>
+
+        <!-- The menu of less common actions. It closes on Escape, on a click outside,
+             and when the focus leaves it. -->
+        <div #menuRoot class="relative shrink-0" (focusout)="onMenuFocusOut($event)">
+          <button
+            #menuButton
+            type="button"
+            class="btn-quiet px-3"
+            aria-haspopup="menu"
+            [attr.aria-expanded]="menuOpen()"
+            [attr.aria-controls]="menuOpen() ? 'menu-' + article().id : null"
+            [attr.aria-label]="'More actions for ' + name()"
+            (click)="menuOpen.set(!menuOpen())"
+          >
+            <span aria-hidden="true" class="text-lg leading-none">⋮</span>
+          </button>
+
+          @if (menuOpen()) {
+            <div
+              role="menu"
+              class="card absolute right-0 z-20 mt-1 min-w-40 p-1"
+              [id]="'menu-' + article().id"
+              [attr.aria-label]="'Actions for ' + name()"
+              (keydown.escape)="closeMenu(true)"
+            >
+              <button
+                #firstMenuItem
+                type="button"
+                role="menuitem"
+                class="flex min-h-11 w-full items-center rounded-md px-3 text-left text-sm hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-amber-700 dark:hover:bg-stone-800 dark:focus-visible:outline-amber-400"
+                (click)="onDuplicate()"
+              >
+                Duplicate
+              </button>
+            </div>
+          }
+        </div>
       </div>
 
       @if (photos().length > 0) {
@@ -148,10 +187,17 @@ export class ArticleView {
   /** True when the user just left edit mode. The focus returns to the Edit button. */
   readonly focusOnInit = input(false);
   readonly edit = output<void>();
+  /** The user picked Duplicate in the menu. The shell makes the copy and opens it. */
+  readonly duplicate = output<void>();
 
   private readonly store = inject(GoldStore);
   protected readonly images = inject(ImageStore);
   private readonly editButton = viewChild.required<ElementRef<HTMLButtonElement>>('editButton');
+  private readonly menuRoot = viewChild.required<ElementRef<HTMLElement>>('menuRoot');
+  private readonly menuButton = viewChild.required<ElementRef<HTMLButtonElement>>('menuButton');
+  private readonly firstMenuItem = viewChild<ElementRef<HTMLButtonElement>>('firstMenuItem');
+
+  protected readonly menuOpen = signal(false);
 
   private readonly list = computed(() => this.images.imagesFor(this.article().id));
   protected readonly photos = computed(() => this.list()());
@@ -195,6 +241,9 @@ export class ArticleView {
   });
 
   constructor() {
+    // Move the focus into the menu when it opens.
+    effect(() => this.firstMenuItem()?.nativeElement.focus());
+
     afterNextRender(() => {
       if (this.focusOnInit()) {
         this.editButton().nativeElement.focus();
@@ -205,6 +254,31 @@ export class ArticleView {
   /** The day of a gold rate for a rate line, such as ", 31 Oct 2026". */
   protected onDay(date: string): string {
     return date ? `, ${formatDay(date)}` : '';
+  }
+
+  protected closeMenu(returnFocus: boolean): void {
+    this.menuOpen.set(false);
+    if (returnFocus) {
+      this.menuButton().nativeElement.focus();
+    }
+  }
+
+  protected onMenuFocusOut(event: FocusEvent): void {
+    const next = event.relatedTarget as Node | null;
+    if (!next || !this.menuRoot().nativeElement.contains(next)) {
+      this.menuOpen.set(false);
+    }
+  }
+
+  protected onDocumentClick(event: MouseEvent): void {
+    if (this.menuOpen() && !this.menuRoot().nativeElement.contains(event.target as Node)) {
+      this.menuOpen.set(false);
+    }
+  }
+
+  protected onDuplicate(): void {
+    this.menuOpen.set(false);
+    this.duplicate.emit();
   }
 
   protected toggle(event: Event): void {

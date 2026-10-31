@@ -63,6 +63,14 @@ import { Collection } from '../core/models';
               </button>
               <button
                 type="button"
+                class="btn-quiet"
+                [attr.aria-label]="'Duplicate ' + collection.title"
+                (click)="duplicate(collection)"
+              >
+                Duplicate
+              </button>
+              <button
+                type="button"
                 class="btn-danger"
                 [attr.aria-label]="'Delete ' + collection.title"
                 (click)="deletingId.set(collection.id)"
@@ -123,6 +131,12 @@ export class CollectionSheet {
     this.store.setActiveCollection(collection.id);
     this.closed.emit();
     this.editShop.emit();
+  }
+
+  /** The copy becomes the active shop, so the sheet closes to show it. */
+  protected duplicate(collection: Collection): void {
+    this.store.duplicateCollection(collection.id);
+    this.closed.emit();
   }
 
   protected confirmDelete(collection: Collection): void {
