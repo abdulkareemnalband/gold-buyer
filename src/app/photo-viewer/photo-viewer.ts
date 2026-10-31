@@ -32,7 +32,6 @@ import { PhotoCarousel } from '../photo-carousel/photo-carousel';
         <app-photo-carousel
           [photos]="photos()"
           [label]="articleName() || 'the article'"
-          [tall]="true"
           [(index)]="current"
         />
       }

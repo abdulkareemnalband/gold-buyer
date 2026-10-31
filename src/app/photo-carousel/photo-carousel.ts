@@ -7,10 +7,8 @@ import {
   inject,
   input,
   model,
-  output,
   viewChild,
 } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
 import { ImageStore } from '../core/image-store';
 import { ArticleImage } from '../core/models';
 
@@ -26,7 +24,6 @@ import { ArticleImage } from '../core/models';
  */
 @Component({
   selector: 'app-photo-carousel',
-  imports: [NgTemplateOutlet],
   host: { class: 'block' },
   template: `
     <div role="region" aria-roledescription="carousel" [attr.aria-label]="'Photos of ' + label()">
@@ -44,43 +41,23 @@ import { ArticleImage } from '../core/models';
       >
         @for (photo of photos(); track photo.id) {
           <div
-            class="flex w-full shrink-0 snap-center items-center justify-center"
+            class="flex h-[65dvh] w-full shrink-0 snap-center items-center justify-center"
             role="group"
             aria-roledescription="slide"
             [attr.aria-label]="$index + 1 + ' of ' + photos().length"
-            [class]="tall() ? 'h-[65dvh]' : 'h-56'"
           >
-            @if (openable()) {
-              <button
-                type="button"
-                class="h-full w-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-amber-700 dark:focus-visible:outline-amber-400"
-                [attr.aria-label]="'Open photo ' + ($index + 1) + ' of ' + label() + ' large'"
-                (click)="opened.emit($index)"
-              >
-                <ng-container
-                  *ngTemplateOutlet="image; context: { $implicit: photo, index: $index }"
-                />
-              </button>
-            } @else {
-              <ng-container
-                *ngTemplateOutlet="image; context: { $implicit: photo, index: $index }"
-              />
-            }
+            <img
+              class="h-full w-full object-contain"
+              [src]="images.urlFor(photo)"
+              [width]="photo.width"
+              [height]="photo.height"
+              [alt]="'Photo ' + ($index + 1) + ' of ' + label()"
+              [attr.loading]="$index === current() ? 'eager' : 'lazy'"
+              decoding="async"
+            />
           </div>
         }
       </div>
-
-      <ng-template #image let-photo let-index="index">
-        <img
-          class="h-full w-full object-contain"
-          [src]="images.urlFor(photo)"
-          [width]="photo.width"
-          [height]="photo.height"
-          [alt]="'Photo ' + (index + 1) + ' of ' + label()"
-          [attr.loading]="index === current() ? 'eager' : 'lazy'"
-          decoding="async"
-        />
-      </ng-template>
 
       @if (photos().length > 1) {
         <div class="mt-2 flex items-center justify-between gap-2">
@@ -115,14 +92,8 @@ import { ArticleImage } from '../core/models';
 export class PhotoCarousel {
   readonly photos = input.required<readonly ArticleImage[]>();
   readonly label = input('this article');
-  /** True for the full-screen viewer. False for the strip on a card. */
-  readonly tall = input(false);
   /** The photo on screen. The parent sets the first one. The strip updates it. */
   readonly index = model(0);
-  /** True when a tap on a photo opens it large. The parent then handles `opened`. */
-  readonly openable = input(false);
-  /** The user tapped a photo. The value is its index. */
-  readonly opened = output<number>();
 
   protected readonly images = inject(ImageStore);
   private readonly strip = viewChild.required<ElementRef<HTMLElement>>('strip');

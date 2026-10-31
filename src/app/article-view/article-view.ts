@@ -14,7 +14,6 @@ import { computeArticle } from '../core/gold-math';
 import { ImageStore } from '../core/image-store';
 import { Article, METAL_NAMES } from '../core/models';
 import { GramsPipe, InrPipe } from '../core/inr-pipe';
-import { PhotoCarousel } from '../photo-carousel/photo-carousel';
 import { PhotoViewer } from '../photo-viewer/photo-viewer';
 import { formatDay } from '../core/dates';
 
@@ -25,7 +24,7 @@ import { formatDay } from '../core/dates';
  */
 @Component({
   selector: 'app-article-view',
-  imports: [InrPipe, GramsPipe, PhotoCarousel, PhotoViewer],
+  imports: [InrPipe, GramsPipe, PhotoViewer],
   template: `
     <article class="card p-3" [attr.aria-labelledby]="'view-title-' + article().id">
       <div class="flex items-start gap-2">
@@ -64,14 +63,29 @@ import { formatDay } from '../core/dates';
       </div>
 
       @if (photos().length > 0) {
-        <app-photo-carousel
-          class="mt-3"
-          [photos]="photos()"
-          [label]="name()"
-          [openable]="true"
-          [(index)]="shown"
-          (opened)="viewing.set($event)"
-        />
+        <!-- Thumbnails only. A tap opens the large carousel on that photo. -->
+        <ul class="mt-3 flex flex-wrap gap-2" [attr.aria-label]="'Photos of ' + name()">
+          @for (photo of photos(); track photo.id) {
+            <li>
+              <button
+                type="button"
+                class="block h-16 w-16 cursor-zoom-in overflow-hidden rounded-lg border border-stone-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700 dark:border-stone-700 dark:focus-visible:outline-amber-400"
+                [attr.aria-label]="'Open photo ' + ($index + 1) + ' of ' + name()"
+                (click)="viewing.set($index)"
+              >
+                <img
+                  class="h-full w-full object-cover"
+                  [src]="images.urlFor(photo)"
+                  [width]="photo.width"
+                  [height]="photo.height"
+                  [alt]="'Photo ' + ($index + 1) + ' of ' + name()"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </button>
+            </li>
+          }
+        </ul>
         <app-photo-viewer
           [photos]="photos()"
           [start]="viewing()"
@@ -81,10 +95,22 @@ import { formatDay } from '../core/dates';
       }
 
       <dl class="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-sm tabular-nums">
-        <dt class="muted">{{ metalName() }} value</dt>
+        <dt class="muted">
+          {{ metalName() }} value
+          <span class="block text-xs">
+            at {{ price().valueRate.perGram | inr: 'exact' }}/g{{ onDay(price().valueRate.date) }}
+          </span>
+        </dt>
         <dd class="text-right">{{ price().metalPrice | inr }}</dd>
 
-        <dt class="muted">Making charge, {{ article().makingChargePercent }}%</dt>
+        <dt class="muted">
+          Making charge, {{ article().makingChargePercent }}%
+          <span class="block text-xs">
+            of {{ price().purchaseRate.perGram | inr: 'exact' }}/g{{
+              onDay(price().purchaseRate.date)
+            }}
+          </span>
+        </dt>
         <dd class="text-right">{{ price().makingCharge | inr }}</dd>
 
         @if (article().stones.length > 0) {
@@ -116,15 +142,13 @@ export class ArticleView {
   readonly edit = output<void>();
 
   private readonly store = inject(GoldStore);
-  private readonly images = inject(ImageStore);
+  protected readonly images = inject(ImageStore);
   private readonly editButton = viewChild.required<ElementRef<HTMLButtonElement>>('editButton');
 
   private readonly list = computed(() => this.images.imagesFor(this.article().id));
   protected readonly photos = computed(() => this.list()());
 
   protected readonly price = computed(() => computeArticle(this.article(), this.store.pricing()));
-  /** The photo the small carousel shows. */
-  protected readonly shown = signal(0);
   /** The photo the large carousel opened on, or null when it is closed. */
   protected readonly viewing = signal<number | null>(null);
 
@@ -157,6 +181,11 @@ export class ArticleView {
         this.editButton().nativeElement.focus();
       }
     });
+  }
+
+  /** The day of a gold rate for a rate line, such as ", 31 Oct 2026". */
+  protected onDay(date: string): string {
+    return date ? `, ${formatDay(date)}` : '';
   }
 
   protected toggle(event: Event): void {
