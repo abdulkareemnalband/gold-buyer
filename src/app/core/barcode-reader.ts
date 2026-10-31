@@ -17,6 +17,7 @@ export const NO_BARCODE = 'No barcode found. Take the photo again, close up and 
 export const BARCODE_TYPES: readonly { id: string; label: string }[] = [
   { id: 'code128', label: 'Code 128' },
   { id: 'qrcode', label: 'QR code' },
+  { id: 'microqrcode', label: 'Micro QR code' },
   { id: 'ean13', label: 'EAN-13' },
   { id: 'ean8', label: 'EAN-8' },
   { id: 'upca', label: 'UPC-A' },
@@ -54,6 +55,7 @@ const FORMATS: Record<string, string> = {
   EAN_13: 'ean13',
   ITF: 'interleaved2of5',
   MAXICODE: 'maxicode',
+  MICRO_QR_CODE: 'microqrcode',
   PDF_417: 'pdf417',
   QR_CODE: 'qrcode',
   RSS_14: 'databaromni',
@@ -63,7 +65,14 @@ const FORMATS: Record<string, string> = {
 };
 
 /** The two-dimensional formats. They draw square, with no text under them. */
-const MATRIX_FORMATS = new Set(['azteccode', 'datamatrix', 'maxicode', 'qrcode', 'pdf417']);
+const MATRIX_FORMATS = new Set([
+  'azteccode',
+  'datamatrix',
+  'maxicode',
+  'microqrcode',
+  'qrcode',
+  'pdf417',
+]);
 
 /**
  * The longest side, in pixels, of each read attempt. A smaller photo reads faster. A
@@ -79,22 +88,36 @@ export class BarcodeReader {
     const bitmap = await createImageBitmap(photo);
 
     try {
-      const reader = new zxing.MultiFormatReader();
-      reader.setHints(new Map([[zxing.DecodeHintType.TRY_HARDER, true]]));
+      const hints = new Map<number, unknown>([[zxing.DecodeHintType.TRY_HARDER, true]]);
+
+      // The same readers, in the same order, as `MultiFormatReader`. The app calls them
+      // one by one, because `MultiFormatReader` in version 0.23 logs a warning for every
+      // reader that finds no code, which is the normal case.
+      const readers = [
+        new zxing.MultiFormatOneDReader(hints),
+        new zxing.QRCodeReader(),
+        new zxing.MicroQRCodeReader(),
+        new zxing.DataMatrixReader(),
+        new zxing.AztecCodeReader(),
+        new zxing.PDF417Reader(),
+        new zxing.MaxiCodeReader(),
+      ];
 
       for (const size of READ_SIZES) {
         const { pixels, width, height } = grayscale(bitmap, size);
         const source = new zxing.RGBLuminanceSource(pixels, width, height);
         const image = new zxing.BinaryBitmap(new zxing.HybridBinarizer(source));
 
-        try {
-          const result = reader.decode(image);
-          const name = zxing.BarcodeFormat[result.getBarcodeFormat()];
-          return { data: result.getText(), type: FORMATS[name] ?? DEFAULT_BARCODE_TYPE };
-        } catch {
-          // zxing throws when it finds no code. Try the next size.
-        } finally {
-          reader.reset();
+        for (const reader of readers) {
+          try {
+            const result = reader.decode(image, hints);
+            const name = zxing.BarcodeFormat[result.getBarcodeFormat()];
+            return { data: result.getText(), type: FORMATS[name] ?? DEFAULT_BARCODE_TYPE };
+          } catch {
+            // A reader throws when it finds no code of its format. Try the next one.
+          } finally {
+            reader.reset();
+          }
         }
       }
       return null;
@@ -120,13 +143,13 @@ export class BarcodeReader {
     const matrix = MATRIX_FORMATS.has(bcid);
 
     try {
+      // A 2D code sets its own height. `bwip-js` rejects an option set to `undefined`, so a
+      // 2D code must leave the `height` key out, not set it to `undefined`.
       const svg = bwip.toSVG({
         bcid,
         text,
         scale: 3,
-        height: matrix ? undefined : 12,
-        includetext: !matrix,
-        textxalign: 'center',
+        ...(matrix ? {} : { height: 12, includetext: true, textxalign: 'center' as const }),
         paddingwidth: 4,
         paddingheight: 4,
         backgroundcolor: 'FFFFFF',
