@@ -21,6 +21,12 @@ export type ShopDetails = Pick<
   'title' | 'goldRates' | 'silverPricePerGram' | 'platinumPricePerGram' | 'stoneRates'
 >;
 
+/** The fields the quick add sets on a new piece. */
+export type NewArticle = Pick<
+  Article,
+  'name' | 'metal' | 'karat' | 'weightGrams' | 'makingChargePercent'
+>;
+
 /** A write waits this long for the next keystroke before it reaches IndexedDB. */
 const WRITE_DELAY_MS = 400;
 
@@ -253,7 +259,8 @@ export class GoldStore {
 
   // --- Articles ------------------------------------------------------------------
 
-  addArticle(): Article | undefined {
+  /** Add a piece to the active collection. The quick add passes the main fields. */
+  addArticle(start: Partial<NewArticle> = {}): Article | undefined {
     const collection = this.activeCollection();
 
     if (!collection) {
@@ -263,13 +270,13 @@ export class GoldStore {
     const article: Article = {
       id: crypto.randomUUID(),
       collectionId: collection.id,
-      name: '',
+      name: start.name?.trim() ?? '',
       notes: '',
       barcode: { data: '', type: DEFAULT_BARCODE_TYPE },
-      metal: 'gold',
-      karat: collection.displayKarat,
-      weightGrams: 0,
-      makingChargePercent: 0,
+      metal: start.metal ?? 'gold',
+      karat: start.karat ?? collection.displayKarat,
+      weightGrams: Math.max(0, safe(start.weightGrams ?? 0)),
+      makingChargePercent: safe(start.makingChargePercent ?? 0),
       makingDiscountPercent: 0,
       bookingDate: '',
       purchaseDate: '',

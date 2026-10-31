@@ -77,6 +77,16 @@
       sm:mx-auto sm:my-auto sm:rounded-2xl;
   }
 
+  /*
+    The button row of a long sheet. It stays at the bottom while the sheet scrolls, so
+    the main button never scrolls out of view. The negative margins undo the padding of
+    the sheet, so the bar reaches both edges. Use it on a sheet that scrolls itself.
+  */
+  .sheet-footer {
+    @apply sticky bottom-0 -mx-4 -mb-4 mt-4 flex gap-2 border-t border-stone-200 bg-white px-4
+      py-3 dark:border-stone-800 dark:bg-stone-900;
+  }
+
   .muted {
     @apply text-stone-600 dark:text-stone-400;
   }

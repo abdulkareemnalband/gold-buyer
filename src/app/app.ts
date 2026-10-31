@@ -6,10 +6,19 @@ import { ArticleCard } from './article-card/article-card';
 import { ArticleView } from './article-view/article-view';
 import { SummaryBar } from './summary-bar/summary-bar';
 import { ShopDialog, ShopDialogMode } from './shop-dialog/shop-dialog';
+import { QuickAddDialog } from './quick-add-dialog/quick-add-dialog';
 
 @Component({
   selector: 'app-root',
-  imports: [RateBar, CollectionSheet, ArticleCard, ArticleView, SummaryBar, ShopDialog],
+  imports: [
+    RateBar,
+    CollectionSheet,
+    ArticleCard,
+    ArticleView,
+    SummaryBar,
+    ShopDialog,
+    QuickAddDialog,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -41,12 +50,11 @@ export class App {
     this.shopRequest.set(null);
   }
 
-  protected add(): void {
-    const article = this.store.addArticle();
+  /** The quick add asks for the main fields. Edit mode has the rest. */
+  protected readonly quickAddOpen = signal(false);
 
-    if (article) {
-      this.editingId.set(article.id);
-    }
+  protected add(): void {
+    this.quickAddOpen.set(true);
   }
 
   protected edit(id: string): void {

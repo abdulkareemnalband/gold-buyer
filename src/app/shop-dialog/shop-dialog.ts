@@ -70,7 +70,7 @@ const shopSchema = schema<ShopForm>((shop) => {
   template: `
     <dialog
       #dialog
-      class="sheet max-h-[90dvh] overflow-y-auto"
+      class="sheet max-h-[90dvh] overflow-y-auto overscroll-contain"
       aria-labelledby="shop-dialog-title"
       (cancel)="onCancel($event)"
       (close)="closed.emit()"
@@ -90,37 +90,11 @@ const shopSchema = schema<ShopForm>((shop) => {
           [formField]="f.title"
         />
 
-        <section class="mt-4" aria-labelledby="gold-rates-title">
-          <h3 id="gold-rates-title" class="text-sm font-semibold">Gold rates</h3>
-          <p class="muted mt-1 text-xs">
-            Add one rate for each day. Type it in any karat. The latest date is the rate of today. A
-            piece with a booking or purchase date uses the rate of that day.
-          </p>
-
+        @if (mode() === 'add') {
+          <!-- A new shop needs today's gold rate first. One row, dated today. -->
+          <h3 class="mt-4 text-sm font-semibold">Gold rate today</h3>
           @for (rate of f.goldRates; track model().goldRates[$index].id; let index = $index) {
-            <div class="mt-2 rounded-lg border border-stone-200 p-2 dark:border-stone-800">
-              <div class="flex items-end gap-2">
-                <div class="flex-1">
-                  <label class="label" [attr.for]="'gold-date-' + index">Date</label>
-                  <input
-                    class="input"
-                    type="date"
-                    [id]="'gold-date-' + index"
-                    [formField]="rate.date"
-                  />
-                </div>
-                <button
-                  type="button"
-                  class="btn-danger shrink-0"
-                  [attr.aria-label]="
-                    'Remove the gold rate of ' + (model().goldRates[index].date || 'no date')
-                  "
-                  (click)="removeGoldRate(index)"
-                >
-                  Remove
-                </button>
-              </div>
-
+            @if (index === 0) {
               <div class="mt-2 flex flex-wrap items-end gap-2">
                 <div class="w-20">
                   <label class="label" [attr.for]="'gold-karat-' + index">Karat</label>
@@ -170,48 +144,140 @@ const shopSchema = schema<ShopForm>((shop) => {
                   A karat runs from 1 to 24.
                 </p>
               }
-            </div>
-          } @empty {
-            <p class="muted mt-2 text-xs">No gold rates yet.</p>
+            }
           }
+        } @else {
+          <details class="mt-4 border-t border-stone-200 pt-1 dark:border-stone-800" open>
+            <summary class="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold">
+              Gold rates ({{ model().goldRates.length }})
+            </summary>
+            <p class="muted text-xs">
+              Add one rate for each day. Type it in any karat. The latest date is the rate of today.
+              A piece with a booking or purchase date uses the rate of that day.
+            </p>
 
-          <button type="button" class="btn-quiet mt-2" (click)="addGoldRate()">
-            Add a gold rate
-          </button>
-        </section>
+            @for (rate of f.goldRates; track model().goldRates[$index].id; let index = $index) {
+              <div class="mt-2 rounded-lg border border-stone-200 p-2 dark:border-stone-800">
+                <div class="flex items-end gap-2">
+                  <div class="flex-1">
+                    <label class="label" [attr.for]="'gold-date-' + index">Date</label>
+                    <input
+                      class="input"
+                      type="date"
+                      [id]="'gold-date-' + index"
+                      [formField]="rate.date"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    class="btn-danger shrink-0"
+                    [attr.aria-label]="
+                      'Remove the gold rate of ' + (model().goldRates[index].date || 'no date')
+                    "
+                    (click)="removeGoldRate(index)"
+                  >
+                    Remove
+                  </button>
+                </div>
 
-        <h3 class="mt-4 text-sm font-semibold">Other metals</h3>
-        <div class="mt-2 grid grid-cols-2 gap-3">
-          <div>
-            <label class="label" for="shop-silver">Silver, per gram</label>
-            <input
-              id="shop-silver"
-              class="input"
-              type="number"
-              inputmode="decimal"
-              step="0.01"
-              placeholder="0"
-              [formField]="f.silverPricePerGram"
-            />
+                <div class="mt-2 flex flex-wrap items-end gap-2">
+                  <div class="w-20">
+                    <label class="label" [attr.for]="'gold-karat-' + index">Karat</label>
+                    <input
+                      class="input"
+                      type="number"
+                      inputmode="decimal"
+                      step="0.5"
+                      [id]="'gold-karat-' + index"
+                      [formField]="rate.karat"
+                    />
+                  </div>
+                  <div
+                    class="segment"
+                    role="group"
+                    [attr.aria-label]="'Common karats for rate ' + (index + 1)"
+                  >
+                    @for (karat of karats; track karat) {
+                      <button
+                        type="button"
+                        class="segment-button min-w-11"
+                        [attr.aria-pressed]="model().goldRates[index].karat === karat"
+                        (click)="setGoldKarat(index, karat)"
+                      >
+                        {{ karat }}
+                      </button>
+                    }
+                  </div>
+                  <div class="min-w-28 flex-1">
+                    <label class="label" [attr.for]="'gold-rate-' + index">
+                      Rate per gram, {{ model().goldRates[index].karat }}kt
+                    </label>
+                    <input
+                      class="input"
+                      type="number"
+                      inputmode="decimal"
+                      step="1"
+                      placeholder="0"
+                      [id]="'gold-rate-' + index"
+                      [formField]="rate.rate"
+                    />
+                  </div>
+                </div>
+
+                @if (f.goldRates[index].karat().errors().length > 0) {
+                  <p class="mt-1 text-xs text-rose-700 dark:text-rose-400" role="alert">
+                    A karat runs from 1 to 24.
+                  </p>
+                }
+              </div>
+            } @empty {
+              <p class="muted mt-2 text-xs">No gold rates yet.</p>
+            }
+
+            <button type="button" class="btn-quiet mt-2" (click)="addGoldRate()">
+              Add a gold rate
+            </button>
+          </details>
+        }
+
+        <details class="mt-3 border-t border-stone-200 pt-1 dark:border-stone-800">
+          <summary class="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold">
+            Other metals
+            <span class="muted text-xs font-normal">{{ otherMetalsNote() }}</span>
+          </summary>
+          <div class="grid grid-cols-2 gap-3 pb-2">
+            <div>
+              <label class="label" for="shop-silver">Silver, per gram</label>
+              <input
+                id="shop-silver"
+                class="input"
+                type="number"
+                inputmode="decimal"
+                step="0.01"
+                placeholder="0"
+                [formField]="f.silverPricePerGram"
+              />
+            </div>
+            <div>
+              <label class="label" for="shop-platinum">Platinum, per gram</label>
+              <input
+                id="shop-platinum"
+                class="input"
+                type="number"
+                inputmode="decimal"
+                step="1"
+                placeholder="0"
+                [formField]="f.platinumPricePerGram"
+              />
+            </div>
           </div>
-          <div>
-            <label class="label" for="shop-platinum">Platinum, per gram</label>
-            <input
-              id="shop-platinum"
-              class="input"
-              type="number"
-              inputmode="decimal"
-              step="1"
-              placeholder="0"
-              [formField]="f.platinumPricePerGram"
-            />
-          </div>
-        </div>
+        </details>
 
-        <section class="mt-4" aria-labelledby="stone-rates-title">
-          <h3 id="stone-rates-title" class="text-sm font-semibold">Stone rates</h3>
-          <p class="muted mt-1 text-xs">A stone on a piece can use one of these rates.</p>
-
+        <details class="border-t border-stone-200 pt-1 dark:border-stone-800">
+          <summary class="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-semibold">
+            Stone rates ({{ model().stoneRates.length }})
+          </summary>
+          <p class="muted text-xs">A stone on a piece can use one of these rates.</p>
           @for (rate of f.stoneRates; track model().stoneRates[$index].id; let index = $index) {
             <div class="mt-2 rounded-lg border border-stone-200 p-2 dark:border-stone-800">
               <div class="flex items-end gap-2">
@@ -272,9 +338,9 @@ const shopSchema = schema<ShopForm>((shop) => {
           <button type="button" class="btn-quiet mt-2" (click)="addStoneRate()">
             Add a stone rate
           </button>
-        </section>
+        </details>
 
-        <div class="mt-4 flex gap-2">
+        <div class="sheet-footer">
           <button type="submit" class="btn-primary flex-1">
             {{ mode() === 'add' ? 'Add shop' : 'Done' }}
           </button>
@@ -334,6 +400,16 @@ export class ShopDialog {
 
       untracked(() => this.store.updateShop(details(shop)));
     });
+  }
+
+  /** The silver and platinum rates in one line, for the closed section. */
+  protected otherMetalsNote(): string {
+    const { silverPricePerGram: silver, platinumPricePerGram: platinum } = this.model();
+    const parts = [
+      num(silver) > 0 ? `silver ₹${num(silver)}/g` : '',
+      num(platinum) > 0 ? `platinum ₹${num(platinum)}/g` : '',
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(' · ') : 'not set';
   }
 
   protected heading(): string {
@@ -424,6 +500,7 @@ export class ShopDialog {
    */
   private seed(): void {
     const shop = this.store.activeCollection();
+    const karat = this.store.displayKarat();
     const edit = this.mode() === 'edit';
     const goldRates = shop?.goldRates ?? [];
     const latest = latestGoldRate(goldRates);
@@ -432,9 +509,11 @@ export class ShopDialog {
       title: edit ? (shop?.title ?? '') : '',
       goldRates: edit
         ? [...goldRates].sort((a, b) => b.date.localeCompare(a.date))
-        : latest
-          ? [{ ...latest, id: crypto.randomUUID(), date: isoDay() }]
-          : [],
+        : [
+            latest
+              ? { ...latest, id: crypto.randomUUID(), date: isoDay() }
+              : { id: crypto.randomUUID(), date: isoDay(), karat, rate: Number.NaN },
+          ],
       silverPricePerGram: shop?.silverPricePerGram ?? 0,
       platinumPricePerGram: shop?.platinumPricePerGram ?? 0,
       stoneRates: edit ? (shop?.stoneRates ?? []) : [],
@@ -448,7 +527,7 @@ function details(shop: ShopForm): Partial<ShopDetails> {
   return {
     title: shop.title,
     goldRates: shop.goldRates
-      .filter((rate) => rate.date)
+      .filter((rate) => rate.date && num(rate.rate) > 0)
       .map((rate) => ({ ...rate, karat: num(rate.karat) || 24, rate: num(rate.rate) })),
     silverPricePerGram: num(shop.silverPricePerGram),
     platinumPricePerGram: num(shop.platinumPricePerGram),
