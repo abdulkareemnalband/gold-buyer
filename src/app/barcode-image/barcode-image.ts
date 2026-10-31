@@ -17,11 +17,11 @@ import { Barcode } from '../core/models';
       <figure
         class="inline-block max-w-full rounded-lg border border-stone-300 bg-white p-1 dark:border-stone-700"
         [class.w-full]="large()"
-        [class.max-w-56]="large()"
+        [class.max-w-40]="large()"
       >
         <img
           class="block h-auto max-w-full"
-          [class]="large() ? 'w-full' : 'max-h-32 w-auto'"
+          [class]="large() ? 'max-h-28 w-full object-contain' : 'max-h-24 w-auto'"
           [src]="src"
           [alt]="typeName() + ' of ' + label() + ': ' + barcode().data"
           decoding="async"
@@ -47,7 +47,7 @@ export class BarcodeImage {
    * keeps both in its text alternative.
    */
   readonly caption = input(true);
-  /** True draws the barcode up to 14rem wide and centred, for view mode. */
+  /** True draws the barcode up to 10rem wide and 7rem tall, centred, for view mode. */
   readonly large = input(false);
 
   private readonly barcodes = inject(BarcodeReader);
