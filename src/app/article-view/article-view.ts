@@ -86,20 +86,84 @@ import { formatDay } from '../core/dates';
               [id]="'menu-' + article().id"
               [attr.aria-label]="'Actions for ' + name()"
               (keydown.escape)="closeMenu(true)"
+              (keydown.arrowdown)="moveFocus(1, $event)"
+              (keydown.arrowup)="moveFocus(-1, $event)"
             >
               <button
                 #firstMenuItem
                 type="button"
                 role="menuitem"
-                class="flex min-h-11 w-full items-center rounded-md px-3 text-left text-sm hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-amber-700 dark:hover:bg-stone-800 dark:focus-visible:outline-amber-400"
-                (click)="onDuplicate()"
+                [class]="menuItemClass"
+                (click)="pickPhoto(cameraInput)"
               >
+                Take a photo
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                [class]="menuItemClass"
+                (click)="pickPhoto(fileInput)"
+              >
+                Add photo from files
+              </button>
+              <button type="button" role="menuitem" [class]="menuItemClass" (click)="onDuplicate()">
                 Duplicate
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                [class]="menuItemClass + ' text-rose-800 dark:text-rose-300'"
+                (click)="askDelete()"
+              >
+                Delete
               </button>
             </div>
           }
         </div>
       </div>
+
+      @if (confirmingDelete()) {
+        <div
+          class="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-rose-300 p-2 dark:border-rose-900"
+          role="group"
+          [attr.aria-label]="'Delete ' + name()"
+        >
+          <p class="flex-1 text-sm">Delete {{ name() }} and its photos?</p>
+          <button type="button" class="btn-danger" (click)="removed.emit()">Delete</button>
+          <button #keepButton type="button" class="btn-quiet" (click)="keep()">Keep</button>
+        </div>
+      }
+
+      <!-- The menu opens these. They stay outside the menu, so their change event still
+           arrives after the menu closes. A desktop browser ignores capture and opens
+           the file picker. -->
+      <input
+        #cameraInput
+        class="sr-only"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        tabindex="-1"
+        aria-hidden="true"
+        (change)="addPhotos($event)"
+      />
+      <input
+        #fileInput
+        class="sr-only"
+        type="file"
+        accept="image/*"
+        multiple
+        tabindex="-1"
+        aria-hidden="true"
+        (change)="addPhotos($event)"
+      />
+
+      @if (saving()) {
+        <p class="muted mt-2 text-xs" role="status">Saving the photo…</p>
+      }
+      @if (failed()) {
+        <p class="mt-2 text-xs text-rose-700 dark:text-rose-400" role="alert">{{ failed() }}</p>
+      }
 
       @if (photos().length > 0) {
         <!-- Thumbnails only. A tap opens the large carousel on that photo. -->
@@ -189,6 +253,8 @@ export class ArticleView {
   readonly edit = output<void>();
   /** The user picked Duplicate in the menu. The shell makes the copy and opens it. */
   readonly duplicate = output<void>();
+  /** The user confirmed Delete. The shell deletes the piece and its photos. */
+  readonly removed = output<void>();
 
   private readonly store = inject(GoldStore);
   protected readonly images = inject(ImageStore);
@@ -198,6 +264,14 @@ export class ArticleView {
   private readonly firstMenuItem = viewChild<ElementRef<HTMLButtonElement>>('firstMenuItem');
 
   protected readonly menuOpen = signal(false);
+  protected readonly failed = signal('');
+  /** True while this card saves a photo. The photo store counts for every card. */
+  protected readonly saving = signal(false);
+  /** True while the card asks the user to confirm a delete. */
+  protected readonly confirmingDelete = signal(false);
+  private readonly keepButton = viewChild<ElementRef<HTMLButtonElement>>('keepButton');
+  protected readonly menuItemClass =
+    'flex min-h-11 w-full items-center rounded-md px-3 text-left text-sm hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-amber-700 dark:hover:bg-stone-800 dark:focus-visible:outline-amber-400';
 
   private readonly list = computed(() => this.images.imagesFor(this.article().id));
   protected readonly photos = computed(() => this.list()());
@@ -243,6 +317,8 @@ export class ArticleView {
   constructor() {
     // Move the focus into the menu when it opens.
     effect(() => this.firstMenuItem()?.nativeElement.focus());
+    // Move the focus to the safe choice when the delete question shows.
+    effect(() => this.keepButton()?.nativeElement.focus());
 
     afterNextRender(() => {
       if (this.focusOnInit()) {
@@ -274,6 +350,52 @@ export class ArticleView {
     if (this.menuOpen() && !this.menuRoot().nativeElement.contains(event.target as Node)) {
       this.menuOpen.set(false);
     }
+  }
+
+  /** Open the camera or the file picker. The menu closes first. */
+  protected pickPhoto(input: HTMLInputElement): void {
+    this.menuOpen.set(false);
+    input.click();
+  }
+
+  protected async addPhotos(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const files = [...(input.files ?? [])];
+    input.value = '';
+    this.failed.set('');
+
+    if (files.length === 0) {
+      return;
+    }
+
+    this.saving.set(true);
+    try {
+      await this.images.add(this.article().id, files);
+    } catch {
+      this.failed.set('The photo did not save. The storage may be full.');
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  /** The arrow keys move the focus through the menu items, and wrap at the ends. */
+  protected moveFocus(step: number, event: Event): void {
+    event.preventDefault();
+    const items = [
+      ...this.menuRoot().nativeElement.querySelectorAll<HTMLElement>('[role="menuitem"]'),
+    ];
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    items[(at + step + items.length) % items.length]?.focus();
+  }
+
+  protected askDelete(): void {
+    this.menuOpen.set(false);
+    this.confirmingDelete.set(true);
+  }
+
+  protected keep(): void {
+    this.confirmingDelete.set(false);
+    this.menuButton().nativeElement.focus();
   }
 
   protected onDuplicate(): void {

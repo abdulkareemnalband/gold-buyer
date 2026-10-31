@@ -45,6 +45,7 @@
                 [focusOnInit]="lastEditedId() === article.id"
                 (edit)="edit(article.id)"
                 (duplicate)="duplicate(article.id)"
+                (removed)="remove(article.id)"
               />
             }
           </li>
