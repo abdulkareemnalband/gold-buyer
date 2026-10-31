@@ -12,16 +12,17 @@ import { Barcode } from '../core/models';
 @Component({
   selector: 'app-barcode-image',
   host: { class: 'block', '[class.text-center]': 'large()' },
+  // Only one max-width class at a time. With both, Tailwind puts `max-w-full` later in the
+  // CSS, so it wins and the barcode fills the card.
   template: `
     @if (url(); as src) {
       <figure
-        class="inline-block max-w-full rounded-lg border border-stone-300 bg-white p-1 dark:border-stone-700"
-        [class.w-full]="large()"
-        [class.max-w-40]="large()"
+        class="inline-block rounded-lg border border-stone-300 bg-white p-1 dark:border-stone-700"
+        [class]="large() ? 'w-full max-w-64' : 'max-w-full'"
       >
         <img
           class="block h-auto max-w-full"
-          [class]="large() ? 'max-h-28 w-full object-contain' : 'max-h-24 w-auto'"
+          [class]="large() ? 'max-h-40 w-full object-contain' : 'max-h-24 w-auto'"
           [src]="src"
           [alt]="typeName() + ' of ' + label() + ': ' + barcode().data"
           decoding="async"
@@ -47,7 +48,7 @@ export class BarcodeImage {
    * keeps both in its text alternative.
    */
   readonly caption = input(true);
-  /** True draws the barcode up to 10rem wide and 7rem tall, centred, for view mode. */
+  /** True draws the barcode up to 16rem wide and 10rem tall, centred, for view mode. */
   readonly large = input(false);
 
   private readonly barcodes = inject(BarcodeReader);
