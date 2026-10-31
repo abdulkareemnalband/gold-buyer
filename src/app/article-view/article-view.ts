@@ -18,6 +18,7 @@ import { Article, METAL_NAMES } from '../core/models';
 import { GramsPipe, InrPipe } from '../core/inr-pipe';
 import { PhotoViewer } from '../photo-viewer/photo-viewer';
 import { BarcodeImage } from '../barcode-image/barcode-image';
+import { CameraDialog } from '../camera-dialog/camera-dialog';
 import { formatDay } from '../core/dates';
 
 /**
@@ -28,7 +29,7 @@ import { formatDay } from '../core/dates';
 @Component({
   selector: 'app-article-view',
   host: { '(document:click)': 'onDocumentClick($event)' },
-  imports: [InrPipe, GramsPipe, PhotoViewer, BarcodeImage],
+  imports: [InrPipe, GramsPipe, PhotoViewer, BarcodeImage, CameraDialog],
   template: `
     <article class="card p-3" [attr.aria-labelledby]="'view-title-' + article().id">
       <div class="flex items-start gap-2">
@@ -96,9 +97,9 @@ import { formatDay } from '../core/dates';
                 type="button"
                 role="menuitem"
                 [class]="menuItemClass"
-                (click)="pickPhoto(cameraInput)"
+                (click)="openCamera()"
               >
-                Take a photo
+                Take photos
               </button>
               <button
                 type="button"
@@ -144,19 +145,16 @@ import { formatDay } from '../core/dates';
         </div>
       }
 
+      <app-camera-dialog
+        [open]="cameraOpen()"
+        [label]="name()"
+        (saved)="savePhotos($event)"
+        (closed)="cameraOpen.set(false)"
+      />
+
       <!-- The menu opens these. They stay outside the menu, so their change event still
            arrives after the menu closes. A desktop browser ignores capture and opens
            the file picker. -->
-      <input
-        #cameraInput
-        class="sr-only"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        tabindex="-1"
-        aria-hidden="true"
-        (change)="addPhotos($event)"
-      />
       <input
         #scanInput
         class="sr-only"
@@ -303,6 +301,7 @@ export class ArticleView {
   protected readonly failed = signal('');
   /** True while this card saves a photo. The photo store counts for every card. */
   protected readonly saving = signal(false);
+  protected readonly cameraOpen = signal(false);
   protected readonly barcodes = inject(BarcodeReader);
   protected readonly scanning = signal(false);
   protected readonly scanError = signal('');
@@ -423,10 +422,19 @@ export class ArticleView {
     }
   }
 
-  protected async addPhotos(event: Event): Promise<void> {
+  protected openCamera(): void {
+    this.menuOpen.set(false);
+    this.cameraOpen.set(true);
+  }
+
+  protected addPhotos(event: Event): void {
     const input = event.target as HTMLInputElement;
     const files = [...(input.files ?? [])];
     input.value = '';
+    void this.savePhotos(files);
+  }
+
+  protected async savePhotos(files: readonly File[]): Promise<void> {
     this.failed.set('');
 
     if (files.length === 0) {
