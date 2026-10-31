@@ -37,6 +37,7 @@ const PIECE: ArticleInput = {
   karat: 22,
   weightGrams: 10,
   makingChargePercent: 12,
+  makingDiscountPercent: 0,
   bookingDate: '',
   purchaseDate: '',
   stones: [RUBY],
@@ -171,6 +172,31 @@ describe('dated gold rates', () => {
     );
 
     expect(percent).toBeCloseTo(12, 9);
+  });
+});
+
+describe('a discount on the making charge', () => {
+  it('takes the discount off the making charge only', () => {
+    const price = computeArticle({ ...PIECE, makingDiscountPercent: 25 }, PRICING);
+
+    expect(price.grossMakingCharge).toBe(7920);
+    expect(price.makingDiscount).toBe(1980);
+    expect(price.makingCharge).toBe(5940);
+    expect(price.metalPrice).toBe(66000);
+    expect(price.priceBeforeTax).toBe(66000 + 5940 + 5000);
+  });
+
+  it('keeps the discount from 0 to 100%', () => {
+    expect(computeArticle({ ...PIECE, makingDiscountPercent: 150 }, PRICING).makingCharge).toBe(0);
+    expect(computeArticle({ ...PIECE, makingDiscountPercent: -10 }, PRICING).makingCharge).toBe(
+      7920,
+    );
+  });
+
+  it('solves the percentage against the net making base', () => {
+    const price = computeArticle({ ...PIECE, makingDiscountPercent: 25 }, PRICING);
+
+    expect(percentFromMakingCharge(price.makingCharge, price.netMakingBase)).toBeCloseTo(12, 9);
   });
 });
 

@@ -177,6 +177,32 @@
     </div>
 
     <div>
+      <label class="label" [attr.for]="'making-discount-' + id()">Discount on making (%)</label>
+      <input
+        class="input"
+        type="number"
+        inputmode="decimal"
+        step="1"
+        placeholder="0"
+        [id]="'making-discount-' + id()"
+        [formField]="f.makingDiscountPercent"
+      />
+    </div>
+
+    <div>
+      <p class="label">Discount</p>
+      <p class="flex min-h-11 items-center text-sm tabular-nums">
+        {{ price().makingDiscount > 0 ? '−' : '' }}{{ price().makingDiscount | inr: 'exact' }}
+      </p>
+    </div>
+
+    @if (f.makingDiscountPercent().errors().length > 0) {
+      <p class="col-span-2 -mt-2 text-xs text-rose-700 dark:text-rose-400" role="alert">
+        A discount runs from 0 to 100%.
+      </p>
+    }
+
+    <div>
       <label class="label" [attr.for]="'before-tax-' + id()">Price before tax</label>
       <input
         class="input input-derived"
@@ -355,6 +381,11 @@
         }
       </dt>
       <dd class="text-right">{{ price().valueRate.perGram | inr }}/g</dd>
+    }
+
+    @if (price().makingDiscount > 0) {
+      <dt>Making charge before discount</dt>
+      <dd class="text-right">{{ price().grossMakingCharge | inr: 'exact' }}</dd>
     }
 
     <dt>Total weight, metal and stones</dt>

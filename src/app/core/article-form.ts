@@ -27,6 +27,7 @@ export interface ArticleForm {
   karat: number;
   weightGrams: number;
   makingChargePercent: number;
+  makingDiscountPercent: number;
   /** Gold only. `YYYY-MM-DD`, or empty for no booking. */
   bookingDate: string;
   /** Gold only. `YYYY-MM-DD`, or empty to use the booking date. */
@@ -67,6 +68,7 @@ export function formToPriceInput(form: ArticleForm) {
     karat: form.karat,
     weightGrams: num(form.weightGrams),
     makingChargePercent: num(form.makingChargePercent),
+    makingDiscountPercent: num(form.makingDiscountPercent),
     bookingDate: form.bookingDate,
     purchaseDate: form.purchaseDate,
     stones: form.stones,
@@ -81,6 +83,7 @@ export function articleToForm(article: Article, pricing: Pricing): ArticleForm {
     karat: article.karat,
     weightGrams: article.weightGrams,
     makingChargePercent: article.makingChargePercent,
+    makingDiscountPercent: article.makingDiscountPercent,
     bookingDate: article.bookingDate,
     purchaseDate: article.purchaseDate,
     stones: resolveStones(article.stones, pricing.stoneRates),
@@ -103,6 +106,7 @@ export function formToArticlePatch(form: ArticleForm): Partial<Article> {
     karat: form.karat,
     weightGrams: num(form.weightGrams),
     makingChargePercent: num(form.makingChargePercent),
+    makingDiscountPercent: num(form.makingDiscountPercent),
     bookingDate: form.bookingDate,
     purchaseDate: form.purchaseDate,
     stones: form.stones.map((stone) => ({
@@ -166,6 +170,7 @@ export const BLANK_FORM: ArticleForm = {
   karat: 22,
   weightGrams: 0,
   makingChargePercent: 0,
+  makingDiscountPercent: 0,
   bookingDate: '',
   purchaseDate: '',
   stones: [],
@@ -254,14 +259,14 @@ function solve(form: ArticleForm, key: DerivedKey, pricing: Pricing): ArticleFor
 
   const percent =
     key === 'makingCharge'
-      ? percentFromMakingCharge(typed, price.makingBase)
+      ? percentFromMakingCharge(typed, price.netMakingBase)
       : key === 'priceBeforeTax'
-        ? percentFromPriceBeforeTax(typed, price.metalPrice, stonePrice, price.makingBase)
+        ? percentFromPriceBeforeTax(typed, price.metalPrice, stonePrice, price.netMakingBase)
         : percentFromPriceAfterTax(
             typed,
             price.metalPrice,
             stonePrice,
-            price.makingBase,
+            price.netMakingBase,
             pricing.gstPercent,
           );
 

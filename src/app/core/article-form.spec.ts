@@ -32,6 +32,7 @@ const ARTICLE: Article = {
   karat: 22,
   weightGrams: 10,
   makingChargePercent: 12,
+  makingDiscountPercent: 0,
   bookingDate: '',
   purchaseDate: '',
   stones: [RUBY],
@@ -312,6 +313,7 @@ describe('formToArticlePatch', () => {
       karat: 22,
       weightGrams: 10,
       makingChargePercent: 12,
+      makingDiscountPercent: 0,
       bookingDate: '',
       purchaseDate: '',
       stones: [RUBY],
@@ -352,6 +354,17 @@ describe('reconcile with a booking date', () => {
     expect(form.makingCharge).toBe(7920);
 
     const result = reconcile(form, { ...form, makingCharge: 13200 }, DATED);
+    expect(result.makingChargePercent).toBe(20);
+  });
+});
+
+describe('reconcile with a making discount', () => {
+  it('solves the making charge percentage before the discount', () => {
+    const form = articleToForm({ ...ARTICLE, makingDiscountPercent: 50 }, PRICING);
+
+    expect(form.makingCharge).toBe(3960);
+
+    const result = reconcile(form, { ...form, makingCharge: 6600 }, PRICING);
     expect(result.makingChargePercent).toBe(20);
   });
 });

@@ -228,6 +228,7 @@ export class GoldStore {
       karat: collection.displayKarat,
       weightGrams: 0,
       makingChargePercent: 0,
+      makingDiscountPercent: 0,
       bookingDate: '',
       purchaseDate: '',
       stones: [],

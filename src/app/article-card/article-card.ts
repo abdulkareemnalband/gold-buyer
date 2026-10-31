@@ -83,8 +83,8 @@ export class ArticleCard implements OnInit {
     computeArticle(formToPriceInput(this.model()), this.store.pricing()),
   );
 
-  /** The three reverse fields divide by the making base. They need a base above zero. */
-  protected readonly canSolve = computed(() => this.price().makingBase > 0);
+  /** The three reverse fields divide by the net making base. They need a base above zero. */
+  protected readonly canSolve = computed(() => this.price().netMakingBase > 0);
 
   /**
    * The rules of the form. The three reverse fields divide by the making base, so the
@@ -92,6 +92,8 @@ export class ArticleCard implements OnInit {
    */
   protected readonly f = form(this.model, (article) => {
     min(article.weightGrams, 0);
+    min(article.makingDiscountPercent, 0, { message: 'A discount runs from 0 to 100%.' });
+    max(article.makingDiscountPercent, 100, { message: 'A discount runs from 0 to 100%.' });
     min(article.karat, 1, { message: 'A karat runs from 1 to 24.' });
     max(article.karat, MAX_KARAT, { message: 'A karat runs from 1 to 24.' });
 

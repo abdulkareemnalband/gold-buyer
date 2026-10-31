@@ -111,7 +111,15 @@ import { formatDay } from '../core/dates';
             }}
           </span>
         </dt>
-        <dd class="text-right">{{ price().makingCharge | inr }}</dd>
+        <dd class="text-right">{{ price().grossMakingCharge | inr }}</dd>
+
+        @if (price().makingDiscount > 0) {
+          <dt class="muted">Discount on making, {{ article().makingDiscountPercent }}%</dt>
+          <dd class="text-right">−{{ price().makingDiscount | inr }}</dd>
+
+          <dt class="muted">Making charge after discount, {{ netMakingPercent() }}%</dt>
+          <dd class="text-right">{{ price().makingCharge | inr }}</dd>
+        }
 
         @if (article().stones.length > 0) {
           <dt class="muted">
@@ -166,6 +174,17 @@ export class ArticleView {
       parts.push(`bought ${formatDay(article.purchaseDate)}`);
     }
     return parts.join(' · ');
+  });
+
+  /**
+   * The making percentage after the discount, such as 9 for 12% less 25%. It rounds to
+   * 2 decimal places for the label.
+   */
+  protected readonly netMakingPercent = computed(() => {
+    const article = this.article();
+    const discount = Math.min(100, Math.max(0, article.makingDiscountPercent));
+    const percent = article.makingChargePercent * (1 - discount / 100);
+    return Math.round(percent * 100) / 100;
   });
 
   protected readonly name = computed(() => this.article().name.trim() || 'this article');

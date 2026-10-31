@@ -48,6 +48,7 @@ export function migrateArticle(value: object): Article {
     // Version 1 called the metal weight `goldWeightGrams`.
     weightGrams: number(row['weightGrams'] ?? row['goldWeightGrams']),
     makingChargePercent: number(row['makingChargePercent']),
+    makingDiscountPercent: number(row['makingDiscountPercent']),
     bookingDate: day(row['bookingDate']),
     purchaseDate: day(row['purchaseDate']),
     stones: list(row['stones']).map(migrateStone),

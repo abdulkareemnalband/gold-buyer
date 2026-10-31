@@ -104,6 +104,8 @@ export interface Article {
   /** Weight of the metal alone, in grams. The stones weigh separately. */
   weightGrams: number;
   makingChargePercent: number;
+  /** The discount the shop gives on the making charge, as a percentage from 0 to 100. */
+  makingDiscountPercent: number;
   /**
    * The day the customer booked the gold, as `YYYY-MM-DD`. An empty string means no
    * booking. The metal value uses the gold rate of this day. Gold only.

@@ -30,6 +30,8 @@ export interface ArticleInput {
   karat: number;
   weightGrams: number;
   makingChargePercent: number;
+  /** The discount on the making charge, from 0 to 100. */
+  makingDiscountPercent: number;
   /** Gold only. An empty string means no booking. */
   bookingDate: string;
   /** Gold only. An empty string means the booking date. */
@@ -204,6 +206,16 @@ export interface ArticlePrice {
   metalPrice: number;
   /** The metal weight at the purchase rate. The making charge is a percentage of this. */
   makingBase: number;
+  /**
+   * The making base less the discount. The making charge after the discount is a
+   * percentage of this, so the reverse solvers divide by it.
+   */
+  netMakingBase: number;
+  /** The making charge before the discount. */
+  grossMakingCharge: number;
+  /** The discount amount. The making charge already has it taken off. */
+  makingDiscount: number;
+  /** The making charge after the discount. */
   makingCharge: number;
   stonePrice: number;
   priceBeforeTax: number;
@@ -221,7 +233,10 @@ export function computeArticle(article: ArticleInput, pricing: Pricing): Article
 
   const metalPrice = weight * value.perGram;
   const makingBase = weight * purchase.perGram;
-  const makingCharge = (finite(article.makingChargePercent) / 100) * makingBase;
+  const discount = Math.min(100, Math.max(0, finite(article.makingDiscountPercent)));
+  const netMakingBase = makingBase * (1 - discount / 100);
+  const grossMakingCharge = (finite(article.makingChargePercent) / 100) * makingBase;
+  const makingCharge = (finite(article.makingChargePercent) / 100) * netMakingBase;
   const priceBeforeTax = metalPrice + makingCharge + stones.price;
   const tax = (priceBeforeTax * finite(pricing.gstPercent)) / 100;
 
@@ -230,6 +245,9 @@ export function computeArticle(article: ArticleInput, pricing: Pricing): Article
     purchaseRate: purchase,
     metalPrice,
     makingBase,
+    netMakingBase,
+    grossMakingCharge,
+    makingDiscount: grossMakingCharge - makingCharge,
     makingCharge,
     stonePrice: stones.price,
     priceBeforeTax,
@@ -282,10 +300,10 @@ export function computeTotals(articles: readonly ArticleInput[], pricing: Pricin
  * The reverse solvers. The user types a price. The app works back to the field that
  * produces that price.
  *
- * The making charge is a percentage of the making base, which is the metal weight at
- * the purchase rate. For a booked piece the making base and the metal price differ. The last
- * three solvers divide by the making base. A zero base makes them undefined, so each one
- * returns `null` in that case. The caller keeps the old value and disables the field.
+ * The making charge is a percentage of the net making base. That base is the metal
+ * weight at the purchase rate, less the making discount. For a booked piece the making
+ * base and the metal price differ. The last three solvers divide by the net making base.
+ * A zero base makes them undefined, so each one returns `null` in that case. The caller keeps the old value and disables the field.
  */
 
 /** The user edits the metal price of the article. The weight follows. */
