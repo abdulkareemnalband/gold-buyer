@@ -5,6 +5,7 @@ import { ImageStore } from './image-store';
 import { migrateArticle, migrateCollection } from './migrate';
 import {
   Article,
+  Barcode,
   Collection,
   DEFAULT_BARCODE_TYPE,
   DEFAULT_GST_PERCENT,
@@ -260,7 +261,7 @@ export class GoldStore {
   // --- Articles ------------------------------------------------------------------
 
   /** Add a piece to the active collection. The quick add passes the main fields. */
-  addArticle(start: Partial<NewArticle> = {}): Article | undefined {
+  addArticle(start: Partial<NewArticle> & { barcode?: Barcode } = {}): Article | undefined {
     const collection = this.activeCollection();
 
     if (!collection) {
@@ -272,7 +273,7 @@ export class GoldStore {
       collectionId: collection.id,
       name: start.name?.trim() ?? '',
       notes: '',
-      barcode: { data: '', type: DEFAULT_BARCODE_TYPE },
+      barcode: start.barcode ?? { data: '', type: DEFAULT_BARCODE_TYPE },
       metal: start.metal ?? 'gold',
       karat: start.karat ?? collection.displayKarat,
       weightGrams: Math.max(0, safe(start.weightGrams ?? 0)),
