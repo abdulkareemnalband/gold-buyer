@@ -28,6 +28,8 @@ const ARTICLE: Article = {
   collectionId: 'c1',
   name: 'Bangle',
   notes: '',
+  barcode: '',
+  barcodeFormat: '',
   metal: 'gold',
   karat: 22,
   weightGrams: 10,
@@ -309,6 +311,8 @@ describe('formToArticlePatch', () => {
     expect(patch).toEqual({
       name: 'Bangle',
       notes: '',
+      barcode: '',
+      barcodeFormat: '',
       metal: 'gold',
       karat: 22,
       weightGrams: 10,

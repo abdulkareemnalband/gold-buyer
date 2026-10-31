@@ -400,6 +400,52 @@
     <dd class="text-right">{{ price().tax | inr: 'exact' }}</dd>
   </dl>
 
+  <!-- Barcode. Type it, or scan it from a camera photo. The photo is not kept. -->
+  <div class="mt-3">
+    <label class="label" [attr.for]="'barcode-' + id()">Barcode</label>
+    <div class="flex gap-2">
+      <input
+        class="input"
+        type="text"
+        autocomplete="off"
+        placeholder="Type or scan"
+        [id]="'barcode-' + id()"
+        [formField]="f.barcode"
+        (input)="clearBarcodeFormat()"
+      />
+      <button
+        type="button"
+        class="btn-quiet shrink-0"
+        [attr.aria-label]="'Scan the barcode of ' + name()"
+        [disabled]="scanning()"
+        (click)="scanInput.click()"
+      >
+        {{ scanning() ? 'Reading…' : 'Scan' }}
+      </button>
+      <input
+        #scanInput
+        class="sr-only"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        tabindex="-1"
+        aria-hidden="true"
+        (change)="scan($event)"
+      />
+    </div>
+    @if (scanError()) {
+      <p class="mt-1 text-xs text-rose-700 dark:text-rose-400" role="alert">{{ scanError() }}</p>
+    }
+    @if (model().barcode.trim()) {
+      <app-barcode-image
+        class="mt-2"
+        [value]="model().barcode"
+        [format]="model().barcodeFormat"
+        [label]="name()"
+      />
+    }
+  </div>
+
   <!-- Notes -->
   <div class="mt-3">
     <label class="label" [attr.for]="'notes-' + id()">Notes</label>

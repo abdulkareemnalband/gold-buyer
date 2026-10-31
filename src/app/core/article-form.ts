@@ -22,6 +22,8 @@ export interface ArticleForm {
   // Source fields. The user owns these.
   name: string;
   notes: string;
+  barcode: string;
+  barcodeFormat: string;
   metal: Metal;
   /** Any karat from 1 to 24. Gold only. */
   karat: number;
@@ -79,6 +81,8 @@ export function articleToForm(article: Article, pricing: Pricing): ArticleForm {
   const source: ArticleForm = {
     name: article.name,
     notes: article.notes,
+    barcode: article.barcode,
+    barcodeFormat: article.barcodeFormat,
     metal: article.metal,
     karat: article.karat,
     weightGrams: article.weightGrams,
@@ -102,6 +106,8 @@ export function formToArticlePatch(form: ArticleForm): Partial<Article> {
   return {
     name: form.name,
     notes: form.notes,
+    barcode: form.barcode.trim(),
+    barcodeFormat: form.barcodeFormat,
     metal: form.metal,
     karat: form.karat,
     weightGrams: num(form.weightGrams),
@@ -166,6 +172,8 @@ function withDerived(source: ArticleForm, pricing: Pricing): ArticleForm {
 export const BLANK_FORM: ArticleForm = {
   name: '',
   notes: '',
+  barcode: '',
+  barcodeFormat: '',
   metal: 'gold',
   karat: 22,
   weightGrams: 0,

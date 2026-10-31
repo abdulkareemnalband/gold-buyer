@@ -26,6 +26,7 @@ import {
   sameForm,
   sameSource,
 } from '../core/article-form';
+import { BarcodeReader, NO_BARCODE } from '../core/barcode-reader';
 import { GoldStore } from '../core/gold-store';
 import { computeArticle, Pricing, rate24, ratePerGram, stoneTotals } from '../core/gold-math';
 import { formatDay } from '../core/dates';
@@ -43,6 +44,7 @@ import {
 } from '../core/models';
 import { GramsPipe, InrPipe } from '../core/inr-pipe';
 import { ArticlePhotos } from '../article-photos/article-photos';
+import { BarcodeImage } from '../barcode-image/barcode-image';
 
 const NEEDS_METAL_PRICE = 'Enter a weight and a rate first.';
 
@@ -52,7 +54,7 @@ const NEEDS_METAL_PRICE = 'Enter a weight and a rate first.';
  */
 @Component({
   selector: 'app-article-card',
-  imports: [FormField, InrPipe, GramsPipe, ArticlePhotos],
+  imports: [FormField, InrPipe, GramsPipe, ArticlePhotos, BarcodeImage],
   templateUrl: './article-card.html',
 })
 export class ArticleCard implements OnInit {
@@ -62,6 +64,9 @@ export class ArticleCard implements OnInit {
   readonly done = output<void>();
 
   protected readonly store = inject(GoldStore);
+  protected readonly barcodes = inject(BarcodeReader);
+  protected readonly scanning = signal(false);
+  protected readonly scanError = signal('');
   protected readonly karats = KARATS;
   protected readonly metals = METALS;
   protected readonly metalNames = METAL_NAMES;
@@ -192,6 +197,43 @@ export class ArticleCard implements OnInit {
 
   ngOnInit(): void {
     this.model.set(articleToForm(this.article(), this.store.pricing()));
+  }
+
+  /** Read the barcode from the camera photo into the field. The photo is not kept. */
+  protected async scan(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const photo = input.files?.[0];
+    input.value = '';
+
+    if (!photo) {
+      return;
+    }
+
+    this.scanning.set(true);
+    this.scanError.set('');
+    try {
+      const scanned = await this.barcodes.read(photo);
+      if (scanned) {
+        this.model.update((current) => ({
+          ...current,
+          barcode: scanned.value,
+          barcodeFormat: scanned.format,
+        }));
+      } else {
+        this.scanError.set(NO_BARCODE);
+      }
+    } catch {
+      this.scanError.set(NO_BARCODE);
+    } finally {
+      this.scanning.set(false);
+    }
+  }
+
+  /** A typed value has no scanned format, so it draws as Code 128. */
+  protected clearBarcodeFormat(): void {
+    if (this.model().barcodeFormat) {
+      this.model.update((current) => ({ ...current, barcodeFormat: '' }));
+    }
   }
 
   protected setMetal(metal: Metal): void {

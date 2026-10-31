@@ -264,6 +264,8 @@ export class GoldStore {
       collectionId: collection.id,
       name: '',
       notes: '',
+      barcode: '',
+      barcodeFormat: '',
       metal: 'gold',
       karat: collection.displayKarat,
       weightGrams: 0,

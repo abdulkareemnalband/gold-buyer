@@ -43,6 +43,8 @@ export function migrateArticle(value: object): Article {
     collectionId: String(row['collectionId']),
     name: String(row['name'] ?? ''),
     notes: String(row['notes'] ?? ''),
+    barcode: String(row['barcode'] ?? ''),
+    barcodeFormat: String(row['barcodeFormat'] ?? ''),
     metal: METALS.includes(row['metal'] as Metal) ? (row['metal'] as Metal) : 'gold',
     karat: number(row['karat'], 22),
     // Version 1 called the metal weight `goldWeightGrams`.

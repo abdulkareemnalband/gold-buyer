@@ -98,6 +98,13 @@ export interface Article {
   collectionId: string;
   name: string;
   notes: string;
+  /** The barcode on the tag of the piece. An empty string means none. */
+  barcode: string;
+  /**
+   * The `bwip-js` symbology of the barcode, such as `ean13` or `qrcode`. A scan sets it.
+   * An empty string means Code 128, which takes any typed value.
+   */
+  barcodeFormat: string;
   metal: Metal;
   /** Any karat from 1 to 24, not only the three on the rate board. Gold only. */
   karat: number;

@@ -10,12 +10,14 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { BarcodeReader, NO_BARCODE } from '../core/barcode-reader';
 import { GoldStore } from '../core/gold-store';
 import { computeArticle } from '../core/gold-math';
 import { ImageStore } from '../core/image-store';
 import { Article, METAL_NAMES } from '../core/models';
 import { GramsPipe, InrPipe } from '../core/inr-pipe';
 import { PhotoViewer } from '../photo-viewer/photo-viewer';
+import { BarcodeImage } from '../barcode-image/barcode-image';
 import { formatDay } from '../core/dates';
 
 /**
@@ -26,7 +28,7 @@ import { formatDay } from '../core/dates';
 @Component({
   selector: 'app-article-view',
   host: { '(document:click)': 'onDocumentClick($event)' },
-  imports: [InrPipe, GramsPipe, PhotoViewer],
+  imports: [InrPipe, GramsPipe, PhotoViewer, BarcodeImage],
   template: `
     <article class="card p-3" [attr.aria-labelledby]="'view-title-' + article().id">
       <div class="flex items-start gap-2">
@@ -106,6 +108,14 @@ import { formatDay } from '../core/dates';
               >
                 Add photo from files
               </button>
+              <button
+                type="button"
+                role="menuitem"
+                [class]="menuItemClass"
+                (click)="pickPhoto(scanInput)"
+              >
+                Scan barcode
+              </button>
               <button type="button" role="menuitem" [class]="menuItemClass" (click)="onDuplicate()">
                 Duplicate
               </button>
@@ -148,6 +158,16 @@ import { formatDay } from '../core/dates';
         (change)="addPhotos($event)"
       />
       <input
+        #scanInput
+        class="sr-only"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        tabindex="-1"
+        aria-hidden="true"
+        (change)="scanBarcode($event)"
+      />
+      <input
         #fileInput
         class="sr-only"
         type="file"
@@ -158,11 +178,26 @@ import { formatDay } from '../core/dates';
         (change)="addPhotos($event)"
       />
 
+      @if (scanning()) {
+        <p class="muted mt-2 text-xs" role="status">Reading the barcode…</p>
+      }
+      @if (scanError()) {
+        <p class="mt-2 text-xs text-rose-700 dark:text-rose-400" role="alert">{{ scanError() }}</p>
+      }
       @if (saving()) {
         <p class="muted mt-2 text-xs" role="status">Saving the photo…</p>
       }
       @if (failed()) {
         <p class="mt-2 text-xs text-rose-700 dark:text-rose-400" role="alert">{{ failed() }}</p>
+      }
+
+      @if (article().barcode) {
+        <app-barcode-image
+          class="mt-3"
+          [value]="article().barcode"
+          [format]="article().barcodeFormat"
+          [label]="name()"
+        />
       }
 
       @if (photos().length > 0) {
@@ -267,6 +302,9 @@ export class ArticleView {
   protected readonly failed = signal('');
   /** True while this card saves a photo. The photo store counts for every card. */
   protected readonly saving = signal(false);
+  protected readonly barcodes = inject(BarcodeReader);
+  protected readonly scanning = signal(false);
+  protected readonly scanError = signal('');
   /** True while the card asks the user to confirm a delete. */
   protected readonly confirmingDelete = signal(false);
   private readonly keepButton = viewChild<ElementRef<HTMLButtonElement>>('keepButton');
@@ -356,6 +394,35 @@ export class ArticleView {
   protected pickPhoto(input: HTMLInputElement): void {
     this.menuOpen.set(false);
     input.click();
+  }
+
+  /** Read the barcode from the camera photo and save it. The photo is not kept. */
+  protected async scanBarcode(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const photo = input.files?.[0];
+    input.value = '';
+
+    if (!photo) {
+      return;
+    }
+
+    this.scanning.set(true);
+    this.scanError.set('');
+    try {
+      const scanned = await this.barcodes.read(photo);
+      if (scanned) {
+        this.store.patchArticle(this.article().id, {
+          barcode: scanned.value,
+          barcodeFormat: scanned.format,
+        });
+      } else {
+        this.scanError.set(NO_BARCODE);
+      }
+    } catch {
+      this.scanError.set(NO_BARCODE);
+    } finally {
+      this.scanning.set(false);
+    }
   }
 
   protected async addPhotos(event: Event): Promise<void> {
