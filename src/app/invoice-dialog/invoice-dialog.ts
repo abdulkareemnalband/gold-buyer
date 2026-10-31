@@ -9,7 +9,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { GoldStore } from '../core/gold-store';
-import { computeArticle } from '../core/gold-math';
+import { computeArticle, resolveStones, stoneGrams } from '../core/gold-math';
 import { formatDay, isoDay } from '../core/dates';
 import { METAL_NAMES } from '../core/models';
 import { GramsPipe, InrPipe } from '../core/inr-pipe';
@@ -49,12 +49,12 @@ import { GramsPipe, InrPipe } from '../core/inr-pipe';
           aria-labelledby="invoice-title"
           tabindex="0"
         >
-          <table class="w-full min-w-[44rem] text-sm tabular-nums">
+          <table class="w-full min-w-[52rem] text-sm tabular-nums">
             <caption class="sr-only">
               Selected jewellery at
               {{
                 store.activeCollection()?.title
-              }}, with the price of each piece and the total to pay
+              }}. Each piece has one row, and each of its stones has a row under it.
             </caption>
             <thead
               class="bg-stone-100 text-xs text-stone-700 dark:bg-stone-800 dark:text-stone-300"
@@ -62,7 +62,8 @@ import { GramsPipe, InrPipe } from '../core/inr-pipe';
               <tr>
                 <th scope="col" class="px-2 py-2 text-left font-medium">#</th>
                 <th scope="col" class="px-2 py-2 text-left font-medium">Item</th>
-                <th scope="col" class="px-2 py-2 text-right font-medium">Weight</th>
+                <th scope="col" class="px-2 py-2 text-right font-medium">Metal wt</th>
+                <th scope="col" class="px-2 py-2 text-right font-medium">Total wt</th>
                 <th scope="col" class="px-2 py-2 text-right font-medium">Rate/g</th>
                 <th scope="col" class="px-2 py-2 text-right font-medium">Metal value</th>
                 <th scope="col" class="px-2 py-2 text-right font-medium">Making</th>
@@ -70,21 +71,19 @@ import { GramsPipe, InrPipe } from '../core/inr-pipe';
                 <th scope="col" class="px-2 py-2 text-right font-medium">Amount</th>
               </tr>
             </thead>
-            <tbody>
-              @for (row of rows(); track row.id; let index = $index) {
-                <tr class="border-t border-stone-200 align-top dark:border-stone-800">
+
+            <!-- One body per piece: the piece row, then one sub-row per stone. -->
+            @for (row of rows(); track row.id; let index = $index) {
+              <tbody class="border-t border-stone-200 dark:border-stone-800">
+                <tr class="align-top">
                   <td class="px-2 py-2">{{ index + 1 }}</td>
                   <th scope="row" class="px-2 py-2 text-left font-normal">
                     <span class="font-medium">{{ row.name }}</span>
                     <span class="muted block text-xs">{{ row.purity }}</span>
                   </th>
-                  <td class="px-2 py-2 text-right">
-                    {{ row.weightGrams | grams }}
-                    @if (row.stoneWeightGrams > 0) {
-                      <span class="muted block text-xs"
-                        >+ {{ row.stoneWeightGrams | grams }} stones</span
-                      >
-                    }
+                  <td class="px-2 py-2 text-right">{{ row.weightGrams | grams }}</td>
+                  <td class="px-2 py-2 text-right font-medium">
+                    {{ row.totalWeightGrams | grams }}
                   </td>
                   <td class="px-2 py-2 text-right">{{ row.ratePerGram | inr: 'exact' }}</td>
                   <td class="px-2 py-2 text-right">{{ row.metalPrice | inr: 'exact' }}</td>
@@ -92,16 +91,43 @@ import { GramsPipe, InrPipe } from '../core/inr-pipe';
                     {{ row.makingCharge | inr: 'exact' }}
                     <span class="muted block text-xs">{{ row.makingPercent }}%</span>
                   </td>
-                  <td class="px-2 py-2 text-right">{{ row.stonePrice | inr: 'exact' }}</td>
+                  <td class="px-2 py-2 text-right">
+                    @if (row.stones.length > 0) {
+                      {{ row.stonePrice | inr: 'exact' }}
+                    }
+                  </td>
                   <td class="px-2 py-2 text-right font-medium">
                     {{ row.priceBeforeTax | inr: 'exact' }}
                   </td>
                 </tr>
-              }
-            </tbody>
+
+                @for (stone of row.stones; track stone.id) {
+                  <tr class="muted text-xs">
+                    <td class="px-2 pb-1"></td>
+                    <th scope="row" class="px-2 pb-1 pl-5 text-left font-normal">
+                      <span aria-hidden="true">↳ </span>{{ stone.kind }} · {{ stone.weight }}
+                      {{ stone.unit }}
+                    </th>
+                    <td class="px-2 pb-1"></td>
+                    <td class="px-2 pb-1 text-right">{{ stone.grams | grams }}</td>
+                    <td class="px-2 pb-1 text-right">
+                      @if (stone.rate) {
+                        {{ stone.rate | inr: 'exact' }}/{{ stone.unit }}
+                      }
+                    </td>
+                    <td class="px-2 pb-1"></td>
+                    <td class="px-2 pb-1"></td>
+                    <td class="px-2 pb-1 text-right">{{ stone.price | inr: 'exact' }}</td>
+                    <td class="px-2 pb-1"></td>
+                  </tr>
+                }
+              </tbody>
+            }
+
             <tfoot class="border-t-2 border-stone-300 dark:border-stone-700">
               <tr class="font-medium">
                 <th scope="row" colspan="2" class="px-2 py-2 text-left">Total</th>
+                <td class="px-2 py-2 text-right">{{ metalWeightGrams() | grams }}</td>
                 <td class="px-2 py-2 text-right">{{ totals().totalWeightGrams | grams }}</td>
                 <td class="px-2 py-2"></td>
                 <td class="px-2 py-2 text-right">{{ totals().metalPrice | inr: 'exact' }}</td>
@@ -110,13 +136,13 @@ import { GramsPipe, InrPipe } from '../core/inr-pipe';
                 <td class="px-2 py-2 text-right">{{ totals().priceBeforeTax | inr: 'exact' }}</td>
               </tr>
               <tr>
-                <th scope="row" colspan="7" class="px-2 py-1 text-right font-normal">
+                <th scope="row" colspan="8" class="px-2 py-1 text-right font-normal">
                   GST at {{ store.gstPercent() }}%
                 </th>
                 <td class="px-2 py-1 text-right">{{ totals().tax | inr: 'exact' }}</td>
               </tr>
               <tr class="text-base font-semibold">
-                <th scope="row" colspan="7" class="px-2 py-2 text-right">Total to pay</th>
+                <th scope="row" colspan="8" class="px-2 py-2 text-right">Total to pay</th>
                 <td class="px-2 py-2 text-right text-amber-800 dark:text-amber-300">
                   {{ totals().priceAfterTax | inr: 'exact' }}
                 </td>
@@ -126,7 +152,8 @@ import { GramsPipe, InrPipe } from '../core/inr-pipe';
         </div>
 
         <p class="muted mt-2 text-xs">
-          Making is the charge after any discount. The total weight includes the stones.
+          Making is the charge after any discount. Total wt is the metal and the stones together. A
+          stone with a shop rate shows that rate.
         </p>
       }
     </dialog>
@@ -140,7 +167,7 @@ export class InvoiceDialog {
   protected readonly today = formatDay(isoDay());
   protected readonly totals = this.store.totals;
 
-  /** One row per selected piece, in the order of the list. */
+  /** One row per selected piece, in the order of the list, each with its stones. */
   protected readonly rows = computed(() => {
     const pricing = this.store.pricing();
 
@@ -150,13 +177,24 @@ export class InvoiceDialog {
       .map((article) => {
         const price = computeArticle(article, pricing);
         const net = price.makingBase > 0 ? (price.makingCharge / price.makingBase) * 100 : 0;
+        const rates = pricing.stoneRates;
 
         return {
           id: article.id,
           name: article.name.trim() || 'Unnamed piece',
           purity: article.metal === 'gold' ? `Gold ${article.karat}kt` : METAL_NAMES[article.metal],
           weightGrams: article.weightGrams,
-          stoneWeightGrams: price.totalWeightGrams - article.weightGrams,
+          totalWeightGrams: price.totalWeightGrams,
+          // The same resolve step as the price math, so each stone shows the price it adds.
+          stones: resolveStones(article.stones, rates).map((stone) => ({
+            id: stone.id,
+            kind: stone.kind.trim() || 'Stone',
+            weight: stone.weight,
+            unit: stone.unit,
+            grams: stoneGrams(stone.weight, stone.unit),
+            rate: rates.find((rate) => rate.id === stone.rateId)?.rate ?? 0,
+            price: stone.price,
+          })),
           ratePerGram: price.valueRate.perGram,
           metalPrice: price.metalPrice,
           makingCharge: price.makingCharge,
@@ -166,6 +204,11 @@ export class InvoiceDialog {
         };
       });
   });
+
+  /** The metal weight of the selected pieces, without the stones. */
+  protected readonly metalWeightGrams = computed(() =>
+    this.rows().reduce((sum, row) => sum + row.weightGrams, 0),
+  );
 
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
 
