@@ -10,26 +10,85 @@ export const KARATS: readonly Karat[] = [24, 22, 18] as const;
 /** Pure gold. No piece can go above this. */
 export const MAX_KARAT = 24;
 
-/** One shop visit. It holds its own gold rate, because every shop quotes its own. */
+/** The metals a piece can be made of. Only gold carries a karat. */
+export type Metal = 'gold' | 'silver' | 'platinum';
+
+export const METALS: readonly Metal[] = ['gold', 'silver', 'platinum'] as const;
+
+export const METAL_NAMES: Record<Metal, string> = {
+  gold: 'Gold',
+  silver: 'Silver',
+  platinum: 'Platinum',
+};
+
+/** The unit a stone is weighed and priced in. */
+export type StoneUnit = 'g' | 'ct';
+
+export const STONE_UNITS: readonly StoneUnit[] = ['g', 'ct'] as const;
+
+export const UNIT_NAMES: Record<StoneUnit, string> = { g: 'per gram', ct: 'per carat' };
+
+/**
+ * One gold rate that a shop quoted on one day. The user types the rate in any karat. The
+ * app keeps the karat as typed, so the typed number never changes by a rounding step.
+ */
+export interface GoldRate {
+  id: string;
+  /** The day of the rate, as `YYYY-MM-DD`. */
+  date: string;
+  /** The karat of the typed rate, from 1 to 24. */
+  karat: number;
+  /** The price of one gram at that karat, in rupees. */
+  rate: number;
+}
+
+/** The rate a shop quotes for one kind of stone, per gram or per carat. */
+export interface StoneRate {
+  id: string;
+  /** The kind of stone, such as diamond or ruby. */
+  kind: string;
+  unit: StoneUnit;
+  /** The price of one unit, in rupees. */
+  rate: number;
+}
+
+/** One shop visit. It holds its own rates, because every shop quotes its own. */
 export interface Collection {
   id: string;
   title: string;
-  /** Rate per gram of 24kt gold, in rupees. Every other karat derives from this. */
-  pricePerGram24: number;
+  /**
+   * The gold rates of this shop, one per day. The rate with the latest date is the rate
+   * of today. A piece can take an older rate through its booking or purchase date.
+   */
+  goldRates: GoldRate[];
   /** The karat the rate bar currently shows. */
   displayKarat: Karat;
+  /** Rate per gram of silver, in rupees. */
+  silverPricePerGram: number;
+  /** Rate per gram of platinum, in rupees. */
+  platinumPricePerGram: number;
+  /** The stone rates of this shop. A stone on a piece can use one of them. */
+  stoneRates: StoneRate[];
   createdAt: number;
 }
 
 /**
- * One kind of precious stone on a piece. A piece carries zero or more of these. The
- * weight adds to the total weight of the piece. The price is a flat amount.
+ * One precious stone on a piece. A piece carries zero or more of these. The weight adds
+ * to the total weight of the piece.
  */
 export interface Stone {
   id: string;
   /** The kind of stone, such as diamond or ruby. */
   kind: string;
-  weightGrams: number;
+  /**
+   * The id of the shop stone rate that prices this stone. An empty string means a flat
+   * price that the user types.
+   */
+  rateId: string;
+  /** The weight, in `unit`. */
+  weight: number;
+  unit: StoneUnit;
+  /** The price of the stone. A stone with a shop rate gets this from the rate. */
   price: number;
 }
 
@@ -39,12 +98,23 @@ export interface Article {
   collectionId: string;
   name: string;
   notes: string;
-  /** Any karat from 1 to 24, not only the three on the rate board. */
+  metal: Metal;
+  /** Any karat from 1 to 24, not only the three on the rate board. Gold only. */
   karat: number;
-  /** Weight of the gold alone, in grams. The stones weigh separately. */
-  goldWeightGrams: number;
+  /** Weight of the metal alone, in grams. The stones weigh separately. */
+  weightGrams: number;
   makingChargePercent: number;
-  /** Zero or more stones. An empty list means plain gold. */
+  /**
+   * The day the customer booked the gold, as `YYYY-MM-DD`. An empty string means no
+   * booking. The metal value uses the gold rate of this day. Gold only.
+   */
+  bookingDate: string;
+  /**
+   * The day the customer bought the piece, as `YYYY-MM-DD`. An empty string means the
+   * booking date. The making charge uses the gold rate of this day. Gold only.
+   */
+  purchaseDate: string;
+  /** Zero or more stones. An empty list means plain metal. */
   stones: Stone[];
   /** True when the article counts towards the totals. */
   selected: boolean;

@@ -1,37 +1,36 @@
-import { Component, effect, inject, linkedSignal, untracked } from '@angular/core';
-import { form, FormField } from '@angular/forms/signals';
+import { Component, computed, inject, output } from '@angular/core';
 import { GoldStore } from '../core/gold-store';
-import { price24From, ratePerGram } from '../core/gold-math';
+import { ratePerGram } from '../core/gold-math';
+import { formatDay } from '../core/dates';
 import { KARATS } from '../core/models';
 import { InrPipe } from '../core/inr-pipe';
 
 /**
- * The gold rate of the active collection.
- *
- * The app stores the 24kt rate alone. The toggle picks the karat the field shows, and an
- * edit in that karat lifts back to the 24kt rate.
+ * The rates of the active shop, read only. The latest gold rate shows in the karat that
+ * the toggle picks. The shop dialog is the one place to change a rate.
  */
 @Component({
   selector: 'app-rate-bar',
-  imports: [FormField, InrPipe],
+  imports: [InrPipe],
   template: `
-    <div class="flex flex-wrap items-end gap-3">
-      <div class="min-w-40 flex-1">
-        <label class="label" for="rate-field">
-          Rate per gram, {{ store.displayKarat() }}kt
-        </label>
-        <input
-          id="rate-field"
-          class="input"
-          type="number"
-          inputmode="decimal"
-          step="1"
-          placeholder="0"
-          [formField]="rateForm"
-        />
+    <div class="flex flex-wrap items-end justify-between gap-3">
+      <div class="min-w-0">
+        <p class="label">
+          Gold, {{ store.displayKarat() }}kt
+          @if (latestDay()) {
+            · {{ latestDay() }}
+          }
+        </p>
+        @if (store.latestGoldRate()) {
+          <p class="text-xl font-semibold tabular-nums">
+            {{ rateFor(store.displayKarat()) | inr }}/g
+          </p>
+        } @else {
+          <p class="muted text-sm">No gold rate yet. Add one in the shop details.</p>
+        }
       </div>
 
-      <div class="segment" role="group" aria-label="Show the rate in karats">
+      <div class="segment" role="group" aria-label="Show the gold rate in karats">
         @for (karat of karats; track karat) {
           <button
             type="button"
@@ -45,50 +44,55 @@ import { InrPipe } from '../core/inr-pipe';
       </div>
     </div>
 
-    <p class="muted mt-2 text-xs tabular-nums">
-      @for (karat of karats; track karat) {
-        <span class="mr-3 inline-block">
-          {{ karat }}kt {{ rateFor(karat) | inr }}/g
-        </span>
-      }
-    </p>
+    <div class="mt-2 flex items-start justify-between gap-2">
+      <p class="muted text-xs tabular-nums">
+        @if (store.latestGoldRate()) {
+          @for (karat of karats; track karat) {
+            <span class="mr-3 inline-block">{{ karat }}kt {{ rateFor(karat) | inr }}/g</span>
+          }
+        }
+        @if (pricing().silverPricePerGram > 0) {
+          <span class="mr-3 inline-block">
+            Silver {{ pricing().silverPricePerGram | inr: 'exact' }}/g
+          </span>
+        }
+        @if (pricing().platinumPricePerGram > 0) {
+          <span class="mr-3 inline-block">
+            Platinum {{ pricing().platinumPricePerGram | inr }}/g
+          </span>
+        }
+        @if (pricing().goldRates.length > 1) {
+          <span class="mr-3 inline-block">{{ pricing().goldRates.length }} gold rates</span>
+        }
+        @if (pricing().stoneRates.length > 0) {
+          <span class="mr-3 inline-block">
+            {{ pricing().stoneRates.length }}
+            {{ pricing().stoneRates.length === 1 ? 'stone rate' : 'stone rates' }}
+          </span>
+        }
+      </p>
+
+      <button
+        type="button"
+        class="btn-quiet shrink-0"
+        aria-haspopup="dialog"
+        (click)="editShop.emit()"
+      >
+        Shop details
+      </button>
+    </div>
   `,
 })
 export class RateBar {
   protected readonly store = inject(GoldStore);
   protected readonly karats = KARATS;
+  protected readonly pricing = this.store.pricing;
+  /** The user wants to edit the rates of the shop. The shell opens the shop dialog. */
+  readonly editShop = output<void>();
 
-  /**
-   * The field value follows the store. A write moves the store, which recomputes this
-   * signal to the same number, so the two settle after one pass.
-   */
-  protected readonly rateModel = linkedSignal(() => round2(this.store.displayRate()));
-  protected readonly rateForm = form(this.rateModel);
+  protected readonly latestDay = computed(() => formatDay(this.store.latestGoldRate()?.date ?? ''));
 
-  constructor() {
-    effect(() => {
-      const typed = this.rateModel();
-
-      if (!Number.isFinite(typed)) {
-        return;
-      }
-
-      untracked(() => {
-        const karat = this.store.displayKarat();
-        const price24 = round2(price24From(typed, karat));
-
-        if (price24 !== round2(this.store.pricePerGram24())) {
-          this.store.setPrice24(price24);
-        }
-      });
-    });
-  }
-
-  protected rateFor(karat: (typeof KARATS)[number]): number {
+  protected rateFor(karat: number): number {
     return ratePerGram(this.store.pricePerGram24(), karat);
   }
-}
-
-function round2(value: number): number {
-  return Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;
 }

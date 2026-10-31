@@ -1,4 +1,6 @@
-<div class="flex min-h-dvh flex-col bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
+<div
+  class="flex min-h-dvh flex-col bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100"
+>
   <header
     class="sticky top-0 z-10 border-b border-stone-200 bg-white/95 px-3 py-2 backdrop-blur dark:border-stone-800 dark:bg-stone-900/95"
   >
@@ -18,18 +20,32 @@
       </div>
 
       <div class="mt-2">
-        <app-rate-bar />
+        <app-rate-bar (editShop)="openShopDialog('edit')" />
       </div>
     </div>
   </header>
 
   <!-- The bottom padding keeps the last card clear of the sticky totals bar. -->
   <main class="mx-auto w-full max-w-xl flex-1 px-3 pt-3 pb-28">
-    @if (store.ready()) {
+    @if (!store.ready()) {
+      <p class="muted p-6 text-center text-sm" role="status">Opening your saved shops…</p>
+    } @else if (store.activeCollection()) {
       <ul class="flex flex-col gap-3">
         @for (article of store.activeArticles(); track article.id) {
           <li>
-            <app-article-card [article]="article" (removed)="remove(article.id)" />
+            @if (editingId() === article.id) {
+              <app-article-card
+                [article]="article"
+                (done)="done(article.id)"
+                (removed)="remove(article.id)"
+              />
+            } @else {
+              <app-article-view
+                [article]="article"
+                [focusOnInit]="lastEditedId() === article.id"
+                (edit)="edit(article.id)"
+              />
+            }
           </li>
         } @empty {
           <li class="card muted p-6 text-center text-sm">
@@ -41,8 +57,6 @@
       <button type="button" class="btn-primary mt-3 w-full" (click)="add()">
         Add a piece of jewellery
       </button>
-    } @else {
-      <p class="muted p-6 text-center text-sm" role="status">Opening your saved shops…</p>
     }
   </main>
 
@@ -50,5 +64,18 @@
     <app-summary-bar />
   </div>
 
-  <app-collection-sheet [open]="sheetOpen()" (closed)="sheetOpen.set(false)" />
+  <app-collection-sheet
+    [open]="sheetOpen()"
+    (closed)="sheetOpen.set(false)"
+    (addShop)="openShopDialog('add')"
+    (editShop)="openShopDialog('edit')"
+  />
+
+  <!-- One dialog adds a shop and edits the details of a shop. -->
+  <app-shop-dialog
+    [open]="shopDialogMode() !== null"
+    [mode]="shopDialogMode() ?? 'add'"
+    [required]="needsShop()"
+    (closed)="closeShopDialog()"
+  />
 </div>

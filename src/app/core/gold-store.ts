@@ -1,15 +1,24 @@
 import { computed, DestroyRef, inject, Service, signal } from '@angular/core';
 import * as db from './gold-db';
-import { computeTotals, ratePerGram, stoneTotals } from './gold-math';
+import { computeTotals, latestGoldRate, Pricing, rate24, resolveStones } from './gold-math';
 import { ImageStore } from './image-store';
+import { migrateArticle, migrateCollection } from './migrate';
 import {
   Article,
   Collection,
   DEFAULT_GST_PERCENT,
+  GoldRate,
   Karat,
   Settings,
   SETTINGS_KEY,
+  StoneRate,
 } from './models';
+
+/** The shop details a user edits in the shop dialog. */
+export type ShopDetails = Pick<
+  Collection,
+  'title' | 'goldRates' | 'silverPricePerGram' | 'platinumPricePerGram' | 'stoneRates'
+>;
 
 /** A write waits this long for the next keystroke before it reaches IndexedDB. */
 const WRITE_DELAY_MS = 400;
@@ -57,28 +66,40 @@ export class GoldStore {
       .sort((a, b) => a.createdAt - b.createdAt);
   });
 
-  readonly pricePerGram24 = computed(() => this.activeCollection()?.pricePerGram24 ?? 0);
+  /** The gold rate with the latest date. The rate bar shows it. */
+  readonly latestGoldRate = computed(() =>
+    latestGoldRate(this.activeCollection()?.goldRates ?? []),
+  );
+  readonly pricePerGram24 = computed(() => {
+    const latest = this.latestGoldRate();
+    return latest ? rate24(latest) : 0;
+  });
   readonly displayKarat = computed<Karat>(() => this.activeCollection()?.displayKarat ?? 22);
-  readonly displayRate = computed(() => ratePerGram(this.pricePerGram24(), this.displayKarat()));
   readonly gstPercent = computed(() => this.settingsState().gstPercent);
+
+  /**
+   * Every rate of the active shop, plus the tax. The equality check keeps the same
+   * object while the values hold, so a rename of the shop does not reprice the cards.
+   */
+  readonly pricing = computed<Pricing>(
+    () => {
+      const collection = this.activeCollection();
+      return {
+        goldRates: collection?.goldRates ?? [],
+        silverPricePerGram: collection?.silverPricePerGram ?? 0,
+        platinumPricePerGram: collection?.platinumPricePerGram ?? 0,
+        gstPercent: this.settingsState().gstPercent,
+        stoneRates: collection?.stoneRates ?? [],
+      };
+    },
+    { equal: samePricing },
+  );
 
   /** The totals cover the selected articles of the active collection only. */
   readonly totals = computed(() =>
     computeTotals(
-      this.activeArticles()
-        .filter((article) => article.selected)
-        .map((article) => {
-          const stones = stoneTotals(article.stones);
-          return {
-            karat: article.karat,
-            goldWeightGrams: article.goldWeightGrams,
-            makingChargePercent: article.makingChargePercent,
-            stoneWeightGrams: stones.weightGrams,
-            stonePrice: stones.price,
-          };
-        }),
-      this.pricePerGram24(),
-      this.gstPercent(),
+      this.activeArticles().filter((article) => article.selected),
+      this.pricing(),
     ),
   );
 
@@ -98,14 +119,22 @@ export class GoldStore {
 
   // --- Collections ---------------------------------------------------------------
 
-  /** A new collection starts from the rate of the active one, because a trip is one day. */
-  addCollection(title: string): Collection {
+  /**
+   * A new collection starts from the latest gold rate and the other metal rates of the
+   * active one, because a trip is one day. The stone rates belong to one shop, so they
+   * start empty.
+   */
+  addCollection(details: Partial<ShopDetails> = {}): Collection {
     const active = this.activeCollection();
+    const clean = cleanDetails(details);
     const collection: Collection = {
       id: crypto.randomUUID(),
-      title: title.trim() || this.nextCollectionTitle(),
-      pricePerGram24: active?.pricePerGram24 ?? 0,
+      title: details.title?.trim() || this.suggestedTitle(),
+      goldRates: clean.goldRates ?? copyLatest(active?.goldRates ?? []),
       displayKarat: active?.displayKarat ?? 22,
+      silverPricePerGram: clean.silverPricePerGram ?? active?.silverPricePerGram ?? 0,
+      platinumPricePerGram: clean.platinumPricePerGram ?? active?.platinumPricePerGram ?? 0,
+      stoneRates: details.stoneRates ?? [],
       createdAt: Date.now(),
     };
 
@@ -116,20 +145,8 @@ export class GoldStore {
     return collection;
   }
 
-  renameCollection(id: string, title: string): void {
-    this.patchCollection(id, { title: title.trim() || this.nextCollectionTitle() });
-  }
-
   setActiveCollection(id: string): void {
     this.patchSettings({ activeCollectionId: id });
-  }
-
-  setPrice24(pricePerGram24: number): void {
-    const id = this.activeCollection()?.id;
-
-    if (id) {
-      this.patchCollection(id, { pricePerGram24: Math.max(0, safe(pricePerGram24)) });
-    }
   }
 
   setDisplayKarat(displayKarat: Karat): void {
@@ -138,6 +155,35 @@ export class GoldStore {
     if (id) {
       this.patchCollection(id, { displayKarat });
     }
+  }
+
+  /**
+   * Set the details of the active shop.
+   *
+   * A stone rate that leaves the list turns every stone that used it into a flat-price
+   * stone, with the price it had. An open article card does the same on its own.
+   */
+  updateShop(patch: Partial<ShopDetails>): void {
+    const collection = this.activeCollection();
+
+    if (!collection) {
+      return;
+    }
+
+    const clean = cleanDetails(patch);
+    if (patch.title !== undefined) {
+      clean.title = patch.title.trim() || collection.title;
+    }
+
+    if (patch.stoneRates) {
+      const kept = new Set(patch.stoneRates.map((rate) => rate.id));
+
+      if (collection.stoneRates.some((rate) => !kept.has(rate.id))) {
+        this.unlinkStones(collection.id, collection.stoneRates, kept);
+      }
+    }
+
+    this.patchCollection(collection.id, clean);
   }
 
   /** Delete a collection, its articles, and their photos. */
@@ -153,11 +199,9 @@ export class GoldStore {
     const imageIds = await db.deleteCollectionDeep(id);
     this.images.forget(imageIds, articleIds);
 
-    const remaining = this.collectionsState();
-    if (remaining.length === 0) {
-      this.addCollection(this.nextCollectionTitle());
-    } else if (this.settingsState().activeCollectionId === id) {
-      this.setActiveCollection(remaining[0].id);
+    // With no shop left, the shell asks for a new one.
+    if (this.settingsState().activeCollectionId === id) {
+      this.setActiveCollection(this.collectionsState()[0]?.id ?? '');
     }
   }
 
@@ -180,9 +224,12 @@ export class GoldStore {
       collectionId: collection.id,
       name: '',
       notes: '',
+      metal: 'gold',
       karat: collection.displayKarat,
-      goldWeightGrams: 0,
+      weightGrams: 0,
       makingChargePercent: 0,
+      bookingDate: '',
+      purchaseDate: '',
       stones: [],
       selected: true,
       createdAt: Date.now(),
@@ -237,17 +284,19 @@ export class GoldStore {
   private async load(): Promise<void> {
     const snapshot = await db.loadSnapshot();
 
-    this.collectionsState.set(snapshot.collections.sort((a, b) => a.createdAt - b.createdAt));
-    this.articlesState.set(snapshot.articles);
+    this.collectionsState.set(
+      snapshot.collections.map(migrateCollection).sort((a, b) => a.createdAt - b.createdAt),
+    );
+    this.articlesState.set(snapshot.articles.map(migrateArticle));
 
     if (snapshot.settings) {
       this.settingsState.set(snapshot.settings);
     }
 
-    if (this.collectionsState().length === 0) {
-      this.addCollection('Shop 1');
-    } else if (!this.activeCollection()) {
-      this.setActiveCollection(this.collectionsState()[0].id);
+    // With no shop at all, the shell asks for the first one.
+    const active = this.activeCollection();
+    if (active && this.settingsState().activeCollectionId !== active.id) {
+      this.setActiveCollection(active.id);
     }
 
     this.readyState.set(true);
@@ -269,6 +318,30 @@ export class GoldStore {
     if (updated) {
       const row = updated;
       this.schedule(`collection:${id}`, () => db.putCollection(row));
+    }
+  }
+
+  /** Turn every stone that uses one of the removed rates into a flat-price stone. */
+  private unlinkStones(
+    collectionId: string,
+    before: readonly StoneRate[],
+    kept: ReadonlySet<string>,
+  ): void {
+    const removed = new Set(before.filter((rate) => !kept.has(rate.id)).map((rate) => rate.id));
+
+    for (const article of this.articlesState()) {
+      if (
+        article.collectionId !== collectionId ||
+        !article.stones.some((stone) => removed.has(stone.rateId))
+      ) {
+        continue;
+      }
+
+      // Price each stone from the old list first, then drop the link.
+      const stones = resolveStones(article.stones, before).map((stone) =>
+        removed.has(stone.rateId) ? { ...stone, rateId: '' } : stone,
+      );
+      this.patchArticle(article.id, { stones });
     }
   }
 
@@ -303,9 +376,51 @@ export class GoldStore {
     await Promise.all(actions.map((action) => action()));
   }
 
-  private nextCollectionTitle(): string {
+  /** The name a new shop gets when the user types none. */
+  suggestedTitle(): string {
     return `Shop ${this.collectionsState().length + 1}`;
   }
+}
+
+/** Keep every rate in the patch finite and not below zero. */
+function cleanDetails(patch: Partial<ShopDetails>): Partial<ShopDetails> {
+  const clean: Partial<ShopDetails> = { ...patch };
+
+  for (const key of ['silverPricePerGram', 'platinumPricePerGram'] as const) {
+    const value = patch[key];
+    if (value !== undefined) {
+      clean[key] = Math.max(0, safe(value));
+    }
+  }
+
+  if (patch.goldRates) {
+    clean.goldRates = patch.goldRates.map((rate) => ({
+      ...rate,
+      karat: Math.min(24, Math.max(1, safe(rate.karat) || 24)),
+      rate: Math.max(0, safe(rate.rate)),
+    }));
+  }
+  return clean;
+}
+
+/** The latest gold rate of a list, as a new row with its own id. */
+function copyLatest(rates: readonly GoldRate[]): GoldRate[] {
+  const latest = latestGoldRate(rates);
+  return latest ? [{ ...latest, id: crypto.randomUUID() }] : [];
+}
+
+function samePricing(a: Pricing, b: Pricing): boolean {
+  return (
+    sameRows(a.goldRates, b.goldRates) &&
+    a.silverPricePerGram === b.silverPricePerGram &&
+    a.platinumPricePerGram === b.platinumPricePerGram &&
+    a.gstPercent === b.gstPercent &&
+    sameRows(a.stoneRates, b.stoneRates)
+  );
+}
+
+function sameRows(a: readonly object[], b: readonly object[]): boolean {
+  return a.length === b.length && a.every((row, index) => shallowEqual(row, b[index]));
 }
 
 function safe(value: number): number {

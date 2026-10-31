@@ -1,10 +1,10 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { ImageStore } from '../core/image-store';
-import { ArticleImage } from '../core/models';
 import { PhotoViewer } from '../photo-viewer/photo-viewer';
 
 /**
- * The photo strip of one article.
+ * The photo strip of one article in edit mode. A tap on a photo opens the full-screen
+ * carousel on that photo.
  *
  * Both buttons wrap a hidden file input. The camera button adds `capture`, which opens
  * the rear camera on a phone. A desktop browser ignores `capture` and opens the file
@@ -23,7 +23,7 @@ import { PhotoViewer } from '../photo-viewer/photo-viewer';
           type="button"
           class="h-16 w-16 overflow-hidden rounded-lg border border-stone-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700 dark:border-stone-700 dark:focus-visible:outline-amber-400"
           [attr.aria-label]="'Open photo ' + ($index + 1) + ' of ' + label()"
-          (click)="viewing.set(photo)"
+          (click)="viewing.set($index)"
         >
           <img
             class="h-full w-full object-cover"
@@ -70,7 +70,8 @@ import { PhotoViewer } from '../photo-viewer/photo-viewer';
     }
 
     <app-photo-viewer
-      [image]="viewing()"
+      [photos]="photos()"
+      [start]="viewing()"
       [articleName]="label()"
       (closed)="viewing.set(null)"
     />
@@ -81,7 +82,8 @@ export class ArticlePhotos {
   readonly articleName = input('');
 
   protected readonly images = inject(ImageStore);
-  protected readonly viewing = signal<ArticleImage | null>(null);
+  /** The index of the photo the viewer opened on, or null when it is closed. */
+  protected readonly viewing = signal<number | null>(null);
   protected readonly failed = signal('');
   protected readonly label = computed(() => this.articleName().trim() || 'this article');
 

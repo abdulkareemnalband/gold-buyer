@@ -1,4 +1,13 @@
-import { Component, effect, ElementRef, inject, input, output, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  effect,
+  ElementRef,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { GoldStore } from '../core/gold-store';
 import { Collection } from '../core/models';
 
@@ -17,19 +26,7 @@ import { Collection } from '../core/models';
       <ul class="flex flex-col gap-2">
         @for (collection of store.collections(); track collection.id) {
           <li class="flex items-center gap-2">
-            @if (renamingId() === collection.id) {
-              <input
-                #title
-                class="input"
-                type="text"
-                [value]="collection.title"
-                [attr.aria-label]="'New name for ' + collection.title"
-                (keydown.enter)="commitRename(collection, title.value)"
-              />
-              <button type="button" class="btn-primary" (click)="commitRename(collection, title.value)">
-                Save
-              </button>
-            } @else if (deletingId() === collection.id) {
+            @if (deletingId() === collection.id) {
               <p class="flex-1 text-sm">
                 Delete {{ collection.title }} and its
                 {{ store.articleCount(collection.id) }}
@@ -58,10 +55,11 @@ import { Collection } from '../core/models';
               <button
                 type="button"
                 class="btn-quiet"
-                [attr.aria-label]="'Rename ' + collection.title"
-                (click)="renamingId.set(collection.id)"
+                aria-haspopup="dialog"
+                [attr.aria-label]="'Edit ' + collection.title"
+                (click)="edit(collection)"
               >
-                Rename
+                Edit
               </button>
               <button
                 type="button"
@@ -86,9 +84,12 @@ import { Collection } from '../core/models';
 export class CollectionSheet {
   readonly open = input.required<boolean>();
   readonly closed = output<void>();
+  /** The user wants a new shop. The shell opens the shop dialog in add mode. */
+  readonly addShop = output<void>();
+  /** The user wants to edit the active shop. The shell opens the shop dialog in edit mode. */
+  readonly editShop = output<void>();
 
   protected readonly store = inject(GoldStore);
-  protected readonly renamingId = signal<string | null>(null);
   protected readonly deletingId = signal<string | null>(null);
 
   private readonly sheet = viewChild.required<ElementRef<HTMLDialogElement>>('sheet');
@@ -113,13 +114,15 @@ export class CollectionSheet {
   }
 
   protected add(): void {
-    this.store.addCollection('');
     this.closed.emit();
+    this.addShop.emit();
   }
 
-  protected commitRename(collection: Collection, title: string): void {
-    this.store.renameCollection(collection.id, title);
-    this.renamingId.set(null);
+  /** The shop dialog edits the active shop, so the shop becomes active first. */
+  protected edit(collection: Collection): void {
+    this.store.setActiveCollection(collection.id);
+    this.closed.emit();
+    this.editShop.emit();
   }
 
   protected confirmDelete(collection: Collection): void {

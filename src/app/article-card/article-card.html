@@ -1,9 +1,12 @@
-<article class="card p-3">
+<article
+  class="card border-amber-400 p-3 dark:border-amber-700"
+  [attr.aria-label]="'Edit ' + heading()"
+>
   <!-- The name sits in an input, so a screen reader needs a heading of its own here.
        It also puts the stones heading at the right level. -->
-  <h2 class="sr-only">{{ heading() }}</h2>
+  <h2 class="sr-only">Edit {{ heading() }}</h2>
 
-  <!-- Name, selection, and delete -->
+  <!-- Name, selection, and done -->
   <div class="flex items-center gap-2">
     <input
       class="h-6 w-6 shrink-0 accent-amber-700 dark:accent-amber-500"
@@ -14,6 +17,7 @@
     <label class="sr-only" [attr.for]="'pick-' + id()">Count {{ name() }} in the totals</label>
 
     <input
+      #nameField
       class="input"
       type="text"
       placeholder="Name of the piece"
@@ -22,48 +26,97 @@
     />
     <label class="sr-only" [attr.for]="'name-' + id()">Name of the piece</label>
 
-    <button
-      type="button"
-      class="btn-danger shrink-0"
-      [attr.aria-label]="'Delete ' + name()"
-      (click)="removed.emit()"
-    >
-      Delete
-    </button>
+    <button type="button" class="btn-primary shrink-0" (click)="done.emit()">Done</button>
   </div>
 
-  <!-- Karat. The three buttons are shortcuts. The field takes any karat from 1 to 24. -->
-  <div class="mt-3 flex flex-wrap items-end gap-2">
-    <div class="w-24">
-      <label class="label" [attr.for]="'karat-' + id()">Karat</label>
-      <input
-        class="input"
-        type="number"
-        inputmode="decimal"
-        step="0.5"
-        placeholder="22"
-        [id]="'karat-' + id()"
-        [formField]="f.karat"
-      />
-    </div>
-
-    <div class="segment" role="group" [attr.aria-label]="'Common karats for ' + name()">
-      @for (karat of karats; track karat) {
+  <!-- Metal -->
+  <div class="mt-3">
+    <span class="label" [id]="'metal-label-' + id()">Metal</span>
+    <div class="segment" role="group" [attr.aria-labelledby]="'metal-label-' + id()">
+      @for (metal of metals; track metal) {
         <button
           type="button"
           class="segment-button"
-          [attr.aria-pressed]="karat === model().karat"
-          (click)="setKarat(karat)"
+          [attr.aria-pressed]="metal === model().metal"
+          (click)="setMetal(metal)"
         >
-          {{ karat }}kt
+          {{ metalNames[metal] }}
         </button>
       }
     </div>
   </div>
 
-  @if (f.karat().errors().length > 0) {
-    <p class="mt-1 text-xs text-rose-700 dark:text-rose-400" role="alert">
-      A karat runs from 1 to 24.
+  <!-- Karat, gold only. The three buttons are shortcuts. The field takes any karat from 1 to 24. -->
+  @if (isGold()) {
+    <div class="mt-3 flex flex-wrap items-end gap-2">
+      <div class="w-24">
+        <label class="label" [attr.for]="'karat-' + id()">Karat</label>
+        <input
+          class="input"
+          type="number"
+          inputmode="decimal"
+          step="0.5"
+          placeholder="22"
+          [id]="'karat-' + id()"
+          [formField]="f.karat"
+        />
+      </div>
+
+      <div class="segment" role="group" [attr.aria-label]="'Common karats for ' + name()">
+        @for (karat of karats; track karat) {
+          <button
+            type="button"
+            class="segment-button"
+            [attr.aria-pressed]="karat === model().karat"
+            (click)="setKarat(karat)"
+          >
+            {{ karat }}kt
+          </button>
+        }
+      </div>
+    </div>
+
+    @if (f.karat().errors().length > 0) {
+      <p class="mt-1 text-xs text-rose-700 dark:text-rose-400" role="alert">
+        A karat runs from 1 to 24.
+      </p>
+    }
+
+    <!-- Two dates. The metal value uses the rate of the booking date. The making charge
+         uses the rate of the purchase date, or of the booking date when it is empty. -->
+    <div class="mt-3 grid grid-cols-2 gap-3">
+      <div>
+        <label class="label" [attr.for]="'booking-' + id()">Booking date</label>
+        <select
+          class="input"
+          [id]="'booking-' + id()"
+          [attr.aria-describedby]="'dates-help-' + id()"
+          [formField]="f.bookingDate"
+        >
+          <option value="">Not set (latest rate)</option>
+          @for (day of rateDays(); track day.date) {
+            <option [value]="day.date">{{ day.label }}, {{ day.perGram | inr }}/g</option>
+          }
+        </select>
+      </div>
+      <div>
+        <label class="label" [attr.for]="'purchase-' + id()">Purchase date</label>
+        <select
+          class="input"
+          [id]="'purchase-' + id()"
+          [attr.aria-describedby]="'dates-help-' + id()"
+          [formField]="f.purchaseDate"
+        >
+          <option value="">Not set (booking date)</option>
+          @for (day of rateDays(); track day.date) {
+            <option [value]="day.date">{{ day.label }}, {{ day.perGram | inr }}/g</option>
+          }
+        </select>
+      </div>
+    </div>
+    <p class="muted mt-1 text-xs" [id]="'dates-help-' + id()">
+      The gold value uses the booking date rate. The making charge uses the purchase date rate. Add
+      more dated rates in the shop details.
     </p>
   }
 
@@ -71,7 +124,7 @@
        what the app works out, and every right field stays editable. -->
   <div class="mt-3 grid grid-cols-2 gap-3">
     <div>
-      <label class="label" [attr.for]="'weight-' + id()">Gold weight (g)</label>
+      <label class="label" [attr.for]="'weight-' + id()">{{ metalName() }} weight (g)</label>
       <input
         class="input"
         type="number"
@@ -79,20 +132,20 @@
         step="0.001"
         placeholder="0"
         [id]="'weight-' + id()"
-        [formField]="f.goldWeightGrams"
+        [formField]="f.weightGrams"
       />
     </div>
 
     <div>
-      <label class="label" [attr.for]="'gold-price-' + id()">Gold price</label>
+      <label class="label" [attr.for]="'metal-price-' + id()"> {{ metalName() }} value </label>
       <input
         class="input input-derived"
         type="number"
         inputmode="decimal"
         step="1"
         placeholder="0"
-        [id]="'gold-price-' + id()"
-        [formField]="f.goldPrice"
+        [id]="'metal-price-' + id()"
+        [formField]="f.metalPrice"
       />
     </div>
 
@@ -152,7 +205,7 @@
     </div>
   </div>
 
-  <!-- Stones. A piece carries zero or more, each with its own weight and price. -->
+  <!-- Stones. A piece carries zero or more. Each one uses a shop rate or a flat price. -->
   <section class="mt-3">
     <h3 class="label">Precious stones</h3>
 
@@ -160,14 +213,19 @@
       <div class="mt-2 rounded-lg border border-stone-200 p-2 dark:border-stone-800">
         <div class="flex items-end gap-2">
           <div class="flex-1">
-            <label class="label" [attr.for]="'stone-kind-' + id() + '-' + index">Kind</label>
-            <input
+            <label class="label" [attr.for]="'stone-rate-' + id() + '-' + index">Price from</label>
+            <select
               class="input"
-              type="text"
-              placeholder="Diamond"
-              [id]="'stone-kind-' + id() + '-' + index"
-              [formField]="stone.kind"
-            />
+              [id]="'stone-rate-' + id() + '-' + index"
+              [formField]="stone.rateId"
+            >
+              <option value="">Flat price</option>
+              @for (rate of store.pricing().stoneRates; track rate.id) {
+                <option [value]="rate.id">
+                  {{ rateLabel(rate.id) }}, {{ rate.rate | inr }} {{ unitNames[rate.unit] }}
+                </option>
+              }
+            </select>
           </div>
 
           <button
@@ -180,10 +238,23 @@
           </button>
         </div>
 
-        <div class="mt-2 grid grid-cols-2 gap-2">
-          <div>
+        @if (!model().stones[index].rateId) {
+          <div class="mt-2">
+            <label class="label" [attr.for]="'stone-kind-' + id() + '-' + index">Kind</label>
+            <input
+              class="input"
+              type="text"
+              placeholder="Diamond"
+              [id]="'stone-kind-' + id() + '-' + index"
+              [formField]="stone.kind"
+            />
+          </div>
+        }
+
+        <div class="mt-2 flex flex-wrap items-end gap-2">
+          <div class="min-w-28 flex-1">
             <label class="label" [attr.for]="'stone-weight-' + id() + '-' + index">
-              Weight (g)
+              Weight ({{ model().stones[index].unit }})
             </label>
             <input
               class="input"
@@ -192,26 +263,50 @@
               step="0.01"
               placeholder="0"
               [id]="'stone-weight-' + id() + '-' + index"
-              [formField]="stone.weightGrams"
+              [formField]="stone.weight"
             />
           </div>
 
-          <div>
-            <label class="label" [attr.for]="'stone-price-' + id() + '-' + index">Price</label>
-            <input
-              class="input"
-              type="number"
-              inputmode="decimal"
-              step="1"
-              placeholder="0"
-              [id]="'stone-price-' + id() + '-' + index"
-              [formField]="stone.price"
-            />
-          </div>
+          @if (model().stones[index].rateId) {
+            <p class="min-w-28 flex-1 pb-2 text-sm tabular-nums">
+              <span class="muted block text-xs">Price</span>
+              {{ model().stones[index].price | inr: 'exact' }}
+            </p>
+          } @else {
+            <div
+              class="segment"
+              role="group"
+              [attr.aria-label]="'Weight unit for stone ' + (index + 1)"
+            >
+              @for (unit of units; track unit) {
+                <button
+                  type="button"
+                  class="segment-button"
+                  [attr.aria-pressed]="model().stones[index].unit === unit"
+                  (click)="setStoneUnit(index, unit)"
+                >
+                  {{ unit }}
+                </button>
+              }
+            </div>
+
+            <div class="min-w-28 flex-1">
+              <label class="label" [attr.for]="'stone-price-' + id() + '-' + index">Price</label>
+              <input
+                class="input"
+                type="number"
+                inputmode="decimal"
+                step="1"
+                placeholder="0"
+                [id]="'stone-price-' + id() + '-' + index"
+                [formField]="stone.price"
+              />
+            </div>
+          }
         </div>
       </div>
     } @empty {
-      <p class="muted text-xs">No stones. This piece is plain gold.</p>
+      <p class="muted text-xs">No stones. This piece is plain metal.</p>
     }
 
     <button
@@ -225,7 +320,7 @@
   </section>
 
   @if (!canSolve()) {
-    <p class="muted mt-2 text-xs" [id]="'solve-hint-' + id()">{{ needsGoldPrice }}</p>
+    <p class="muted mt-2 text-xs" [id]="'solve-hint-' + id()">{{ needsMetalPrice }}</p>
   }
 
   @if (isDiscount()) {
@@ -236,10 +331,33 @@
 
   <!-- The read-only lines -->
   <dl class="muted mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs tabular-nums">
-    <dt>Rate for {{ model().karat }}kt</dt>
-    <dd class="text-right">{{ price().ratePerGram | inr }}/g</dd>
+    @if (twoRates()) {
+      <dt>
+        Value rate{{ isGold() ? ', ' + model().karat + 'kt' : '' }}
+        @if (price().valueRate.date) {
+          · {{ formatDay(price().valueRate.date) }}
+        }
+      </dt>
+      <dd class="text-right">{{ price().valueRate.perGram | inr }}/g</dd>
 
-    <dt>Total weight, gold and stones</dt>
+      <dt>
+        Making charge rate
+        @if (price().purchaseRate.date) {
+          · {{ formatDay(price().purchaseRate.date) }}
+        }
+      </dt>
+      <dd class="text-right">{{ price().purchaseRate.perGram | inr }}/g</dd>
+    } @else {
+      <dt>
+        Rate{{ isGold() ? ', ' + model().karat + 'kt' : '' }}
+        @if (price().valueRate.date) {
+          · {{ formatDay(price().valueRate.date) }}
+        }
+      </dt>
+      <dd class="text-right">{{ price().valueRate.perGram | inr }}/g</dd>
+    }
+
+    <dt>Total weight, metal and stones</dt>
     <dd class="text-right">
       {{ price().totalWeightGrams | grams }}
       @if (stoneCarats() > 0) {
@@ -267,5 +385,17 @@
   <div class="mt-3">
     <span class="label">Photos</span>
     <app-article-photos [articleId]="id()" [articleName]="model().name" />
+  </div>
+
+  <div class="mt-4 flex gap-2">
+    <button type="button" class="btn-primary flex-1" (click)="done.emit()">Done</button>
+    <button
+      type="button"
+      class="btn-danger"
+      [attr.aria-label]="'Delete ' + name()"
+      (click)="removed.emit()"
+    >
+      Delete
+    </button>
   </div>
 </article>

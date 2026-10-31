@@ -1,12 +1,14 @@
-import { Article, Stone } from './models';
+import { Article, Metal, Stone } from './models';
 import {
   computeArticle,
   percentFromMakingCharge,
   percentFromPriceAfterTax,
   percentFromPriceBeforeTax,
-  ratePerGram,
+  Pricing,
+  resolveStones,
   stoneTotals,
-  weightFromGoldPrice,
+  valueRate,
+  weightFromMetalPrice,
 } from './gold-math';
 
 /**
@@ -20,16 +22,21 @@ export interface ArticleForm {
   // Source fields. The user owns these.
   name: string;
   notes: string;
-  /** Any karat from 1 to 24. */
+  metal: Metal;
+  /** Any karat from 1 to 24. Gold only. */
   karat: number;
-  goldWeightGrams: number;
+  weightGrams: number;
   makingChargePercent: number;
+  /** Gold only. `YYYY-MM-DD`, or empty for no booking. */
+  bookingDate: string;
+  /** Gold only. `YYYY-MM-DD`, or empty to use the booking date. */
+  purchaseDate: string;
   /** Zero or more stones. Their totals feed the price. */
   stones: Stone[];
   selected: boolean;
 
   // Derived fields. `reconcile` owns these, except the one the user just typed in.
-  goldPrice: number;
+  metalPrice: number;
   makingCharge: number;
   priceBeforeTax: number;
   priceAfterTax: number;
@@ -37,7 +44,7 @@ export interface ArticleForm {
 
 /** The four fields that a reverse solver can write back into a source field. */
 export const DERIVED_KEYS = [
-  'goldPrice',
+  'metalPrice',
   'makingCharge',
   'priceBeforeTax',
   'priceAfterTax',
@@ -53,39 +60,38 @@ const MONEY_DP = 2;
  */
 const RATIO_DP = 4;
 
-/** The price inputs of one form model, with the stone list already added up. */
+/** The price inputs of one form model. */
 export function formToPriceInput(form: ArticleForm) {
-  const stones = stoneTotals(form.stones);
-
   return {
+    metal: form.metal,
     karat: form.karat,
-    goldWeightGrams: num(form.goldWeightGrams),
+    weightGrams: num(form.weightGrams),
     makingChargePercent: num(form.makingChargePercent),
-    stoneWeightGrams: stones.weightGrams,
-    stonePrice: stones.price,
+    bookingDate: form.bookingDate,
+    purchaseDate: form.purchaseDate,
+    stones: form.stones,
   };
 }
 
-export function articleToForm(
-  article: Article,
-  pricePerGram24: number,
-  gstPercent: number,
-): ArticleForm {
+export function articleToForm(article: Article, pricing: Pricing): ArticleForm {
   const source: ArticleForm = {
     name: article.name,
     notes: article.notes,
+    metal: article.metal,
     karat: article.karat,
-    goldWeightGrams: article.goldWeightGrams,
+    weightGrams: article.weightGrams,
     makingChargePercent: article.makingChargePercent,
-    stones: article.stones,
+    bookingDate: article.bookingDate,
+    purchaseDate: article.purchaseDate,
+    stones: resolveStones(article.stones, pricing.stoneRates),
     selected: article.selected,
-    goldPrice: 0,
+    metalPrice: 0,
     makingCharge: 0,
     priceBeforeTax: 0,
     priceAfterTax: 0,
   };
 
-  return withDerived(source, pricePerGram24, gstPercent);
+  return withDerived(source, pricing);
 }
 
 /** The source fields of the form, ready for a store patch. */
@@ -93,12 +99,15 @@ export function formToArticlePatch(form: ArticleForm): Partial<Article> {
   return {
     name: form.name,
     notes: form.notes,
+    metal: form.metal,
     karat: form.karat,
-    goldWeightGrams: num(form.goldWeightGrams),
+    weightGrams: num(form.weightGrams),
     makingChargePercent: num(form.makingChargePercent),
+    bookingDate: form.bookingDate,
+    purchaseDate: form.purchaseDate,
     stones: form.stones.map((stone) => ({
       ...stone,
-      weightGrams: num(stone.weightGrams),
+      weight: num(stone.weight),
       price: num(stone.price),
     })),
     selected: form.selected,
@@ -110,44 +119,39 @@ export function formToArticlePatch(form: ArticleForm): Partial<Article> {
  *
  * The steps run in this order:
  *
- * 1. Compare `next` against `previous` to find the changed keys.
- * 2. A changed derived key wins. Its solver writes the matching source field.
- * 3. Otherwise a source field changed, or the rate changed. Every derived field
+ * 1. Fill each stone that uses a shop rate from that rate.
+ * 2. Compare `next` against `previous` to find the changed keys.
+ * 3. A changed derived key wins. Its solver writes the matching source field.
+ * 4. Otherwise a source field changed, or the rate changed. Every derived field
  *    recomputes.
- * 4. Recompute every derived field except the one the user typed in.
+ * 5. Recompute every derived field except the one the user typed in.
  *
- * Step 4 is the loop guard and the cursor guard. The app never rewrites the field under
+ * Step 5 is the loop guard and the cursor guard. The app never rewrites the field under
  * the user's cursor, so `reconcile` reaches a fixed point after one pass.
  */
-export function reconcile(
-  previous: ArticleForm,
-  next: ArticleForm,
-  pricePerGram24: number,
-  gstPercent: number,
-): ArticleForm {
-  const editedKey = changedDerivedKey(previous, next);
-  const source = editedKey ? solve(next, editedKey, pricePerGram24, gstPercent) : next;
-  const result = withDerived(source, pricePerGram24, gstPercent);
+export function reconcile(previous: ArticleForm, next: ArticleForm, pricing: Pricing): ArticleForm {
+  const stones = resolveStones(next.stones, pricing.stoneRates);
+  const linked = stones === next.stones ? next : { ...next, stones };
+
+  const editedKey = changedDerivedKey(previous, linked);
+  const source = editedKey ? solve(linked, editedKey, pricing) : linked;
+  const result = withDerived(source, pricing);
 
   // Keep the typed number exactly as the user typed it.
   if (editedKey) {
-    result[editedKey] = next[editedKey];
+    result[editedKey] = linked[editedKey];
   }
 
   return result;
 }
 
 /** Fill the four derived fields from the source fields. */
-function withDerived(
-  source: ArticleForm,
-  pricePerGram24: number,
-  gstPercent: number,
-): ArticleForm {
-  const price = computeArticle(formToPriceInput(source), pricePerGram24, gstPercent);
+function withDerived(source: ArticleForm, pricing: Pricing): ArticleForm {
+  const price = computeArticle(formToPriceInput(source), pricing);
 
   return {
     ...source,
-    goldPrice: round(price.goldPrice, MONEY_DP),
+    metalPrice: round(price.metalPrice, MONEY_DP),
     makingCharge: round(price.makingCharge, MONEY_DP),
     priceBeforeTax: round(price.priceBeforeTax, MONEY_DP),
     priceAfterTax: round(price.priceAfterTax, MONEY_DP),
@@ -158,24 +162,29 @@ function withDerived(
 export const BLANK_FORM: ArticleForm = {
   name: '',
   notes: '',
+  metal: 'gold',
   karat: 22,
-  goldWeightGrams: 0,
+  weightGrams: 0,
   makingChargePercent: 0,
+  bookingDate: '',
+  purchaseDate: '',
   stones: [],
   selected: true,
-  goldPrice: 0,
+  metalPrice: 0,
   makingCharge: 0,
   priceBeforeTax: 0,
   priceAfterTax: 0,
 };
 
 export function newStone(): Stone {
-  return { id: crypto.randomUUID(), kind: '', weightGrams: 0, price: 0 };
+  return { id: crypto.randomUUID(), kind: '', rateId: '', weight: 0, unit: 'ct', price: 0 };
 }
 
 /** True when the two models hold the same value in every field. */
 export function sameForm(a: ArticleForm, b: ArticleForm): boolean {
-  return (Object.keys(a) as (keyof ArticleForm)[]).every((key) => Object.is(a[key], b[key]));
+  return (Object.keys(a) as (keyof ArticleForm)[]).every((key) =>
+    key === 'stones' ? sameStones(a.stones, b.stones) : Object.is(a[key], b[key]),
+  );
 }
 
 /** The first derived field whose value the user changed, or null. */
@@ -204,30 +213,28 @@ export function sameSource(a: ArticleForm, b: ArticleForm): boolean {
 
 function sameStones(a: readonly Stone[], b: readonly Stone[]): boolean {
   return (
-    a.length === b.length &&
-    a.every(
-      (stone, index) =>
-        stone.id === b[index].id &&
-        stone.kind === b[index].kind &&
-        Object.is(stone.weightGrams, b[index].weightGrams) &&
-        Object.is(stone.price, b[index].price),
-    )
+    a === b ||
+    (a.length === b.length &&
+      a.every(
+        (stone, index) =>
+          stone.id === b[index].id &&
+          stone.kind === b[index].kind &&
+          stone.rateId === b[index].rateId &&
+          stone.unit === b[index].unit &&
+          Object.is(stone.weight, b[index].weight) &&
+          Object.is(stone.price, b[index].price),
+      ))
   );
 }
 
 /**
  * Run the solver for the edited field and write the result into its source field.
  *
- * A solver returns null when the gold price is zero, because the division has no answer.
- * The form then keeps the source field it already had. The schema disables those fields
- * in that state, so a user cannot reach this path through the UI.
+ * A solver returns null when it has nothing to divide by. The form then keeps the
+ * source field it already had. The schema disables those fields in that state, so a
+ * user cannot reach this path through the UI.
  */
-function solve(
-  form: ArticleForm,
-  key: DerivedKey,
-  pricePerGram24: number,
-  gstPercent: number,
-): ArticleForm {
+function solve(form: ArticleForm, key: DerivedKey, pricing: Pricing): ArticleForm {
   const typed = form[key];
 
   // An unparsed field holds no number yet. Wait for the next keystroke.
@@ -235,21 +242,28 @@ function solve(
     return form;
   }
 
-  const rate = ratePerGram(pricePerGram24, form.karat);
-  const goldPrice = num(form.goldWeightGrams) * rate;
-  const stonePrice = stoneTotals(form.stones).price;
+  const input = formToPriceInput(form);
 
-  if (key === 'goldPrice') {
-    const weight = weightFromGoldPrice(typed, rate);
-    return weight === null ? form : { ...form, goldWeightGrams: round(weight, RATIO_DP) };
+  if (key === 'metalPrice') {
+    const weight = weightFromMetalPrice(typed, valueRate(pricing, input).perGram);
+    return weight === null ? form : { ...form, weightGrams: round(weight, RATIO_DP) };
   }
+
+  const price = computeArticle(input, pricing);
+  const stonePrice = stoneTotals(form.stones).price;
 
   const percent =
     key === 'makingCharge'
-      ? percentFromMakingCharge(typed, goldPrice)
+      ? percentFromMakingCharge(typed, price.makingBase)
       : key === 'priceBeforeTax'
-        ? percentFromPriceBeforeTax(typed, goldPrice, stonePrice)
-        : percentFromPriceAfterTax(typed, goldPrice, stonePrice, gstPercent);
+        ? percentFromPriceBeforeTax(typed, price.metalPrice, stonePrice, price.makingBase)
+        : percentFromPriceAfterTax(
+            typed,
+            price.metalPrice,
+            stonePrice,
+            price.makingBase,
+            pricing.gstPercent,
+          );
 
   return percent === null ? form : { ...form, makingChargePercent: round(percent, RATIO_DP) };
 }
