@@ -192,7 +192,13 @@ import { formatDay } from '../core/dates';
       }
 
       @if (article().barcode.data) {
-        <app-barcode-image class="mt-3" [barcode]="article().barcode" [label]="name()" />
+        <app-barcode-image
+          class="mt-3"
+          [barcode]="article().barcode"
+          [label]="name()"
+          [caption]="false"
+          [large]="true"
+        />
       }
 
       @if (photos().length > 0) {

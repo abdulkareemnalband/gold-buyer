@@ -11,21 +11,26 @@ import { Barcode } from '../core/models';
  */
 @Component({
   selector: 'app-barcode-image',
-  host: { class: 'block' },
+  host: { class: 'block', '[class.text-center]': 'large()' },
   template: `
     @if (url(); as src) {
       <figure
         class="inline-block max-w-full rounded-lg border border-stone-300 bg-white p-1 dark:border-stone-700"
+        [class.w-full]="large()"
+        [class.max-w-56]="large()"
       >
         <img
-          class="block h-auto max-h-32 w-auto max-w-full"
+          class="block h-auto max-w-full"
+          [class]="large() ? 'w-full' : 'max-h-32 w-auto'"
           [src]="src"
           [alt]="typeName() + ' of ' + label() + ': ' + barcode().data"
           decoding="async"
         />
-        <figcaption class="px-1 pt-1 text-center text-xs break-all text-stone-700 tabular-nums">
-          {{ typeName() }} · {{ barcode().data }}
-        </figcaption>
+        @if (caption()) {
+          <figcaption class="px-1 pt-1 text-center text-xs break-all text-stone-700 tabular-nums">
+            {{ typeName() }} · {{ barcode().data }}
+          </figcaption>
+        }
       </figure>
     } @else if (failed()) {
       <p class="text-xs break-all text-rose-700 dark:text-rose-400">
@@ -37,6 +42,13 @@ import { Barcode } from '../core/models';
 export class BarcodeImage {
   readonly barcode = input.required<Barcode>();
   readonly label = input('this article');
+  /**
+   * False hides the line under the barcode with the format and the value. The image
+   * keeps both in its text alternative.
+   */
+  readonly caption = input(true);
+  /** True draws the barcode up to 14rem wide and centred, for view mode. */
+  readonly large = input(false);
 
   private readonly barcodes = inject(BarcodeReader);
   protected readonly url = signal<string | null>(null);
