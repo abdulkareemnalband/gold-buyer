@@ -26,12 +26,14 @@ import {
   sameForm,
   sameSource,
 } from '../core/article-form';
-import { BARCODE_TYPES, BarcodeReader, NO_BARCODE } from '../core/barcode-reader';
+import { BARCODE_TYPES } from '../core/barcode-reader';
+import { ScanDialog } from '../scan-dialog/scan-dialog';
 import { GoldStore } from '../core/gold-store';
 import { computeArticle, Pricing, rate24, ratePerGram, stoneTotals } from '../core/gold-math';
 import { formatDay } from '../core/dates';
 import {
   Article,
+  Barcode,
   GRAMS_PER_CARAT,
   KARATS,
   MAX_KARAT,
@@ -54,7 +56,7 @@ const NEEDS_METAL_PRICE = 'Enter a weight and a rate first.';
  */
 @Component({
   selector: 'app-article-card',
-  imports: [FormField, InrPipe, GramsPipe, ArticlePhotos, BarcodeImage],
+  imports: [FormField, InrPipe, GramsPipe, ArticlePhotos, BarcodeImage, ScanDialog],
   templateUrl: './article-card.html',
 })
 export class ArticleCard implements OnInit {
@@ -64,10 +66,8 @@ export class ArticleCard implements OnInit {
   readonly done = output<void>();
 
   protected readonly store = inject(GoldStore);
-  protected readonly barcodes = inject(BarcodeReader);
   protected readonly barcodeTypes = BARCODE_TYPES;
-  protected readonly scanning = signal(false);
-  protected readonly scanError = signal('');
+  protected readonly scanOpen = signal(false);
   protected readonly karats = KARATS;
   protected readonly metals = METALS;
   protected readonly metalNames = METAL_NAMES;
@@ -200,30 +200,9 @@ export class ArticleCard implements OnInit {
     this.model.set(articleToForm(this.article(), this.store.pricing()));
   }
 
-  /** Read the barcode from the camera photo into the field. The photo is not kept. */
-  protected async scan(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const photo = input.files?.[0];
-    input.value = '';
-
-    if (!photo) {
-      return;
-    }
-
-    this.scanning.set(true);
-    this.scanError.set('');
-    try {
-      const scanned = await this.barcodes.read(photo);
-      if (scanned) {
-        this.model.update((current) => ({ ...current, barcode: scanned }));
-      } else {
-        this.scanError.set(NO_BARCODE);
-      }
-    } catch {
-      this.scanError.set(NO_BARCODE);
-    } finally {
-      this.scanning.set(false);
-    }
+  /** The live scan read a barcode. It goes into the field with its format. */
+  protected onScanned(barcode: Barcode): void {
+    this.model.update((current) => ({ ...current, barcode }));
   }
 
   protected setMetal(metal: Metal): void {

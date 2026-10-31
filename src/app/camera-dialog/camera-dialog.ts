@@ -10,6 +10,17 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import {
+  CameraInfo,
+  cameraIdOf,
+  closeCamera,
+  hasLiveCamera,
+  listCameras,
+  openCamera,
+  prepareCamera,
+  rememberCamera,
+} from '../core/camera';
+import { CameraPicker } from '../camera-picker/camera-picker';
 
 interface Shot {
   id: string;
@@ -29,6 +40,7 @@ interface Shot {
  */
 @Component({
   selector: 'app-camera-dialog',
+  imports: [CameraPicker],
   template: `
     <dialog
       #dialog
@@ -51,21 +63,14 @@ interface Shot {
           />
         </label>
       } @else {
-        @if (cameras().length > 1) {
-          <!-- A phone shows each lens as its own camera, such as wide and ultra wide. -->
-          <label class="label" for="camera-pick">Camera</label>
-          <select
-            id="camera-pick"
-            class="input mb-3"
-            [value]="cameraId()"
-            (change)="switchCamera($any($event.target).value)"
-          >
-            @for (camera of cameras(); track camera.id) {
-              <option [value]="camera.id" [selected]="camera.id === cameraId()">
-                {{ camera.label }}
-              </option>
-            }
-          </select>
+        <app-camera-picker
+          [cameras]="cameras()"
+          [cameraId]="cameraId()"
+          [busy]="switching()"
+          (picked)="switchCamera($event)"
+        />
+        @if (notice()) {
+          <p class="mb-2 text-xs text-rose-700 dark:text-rose-400" role="alert">{{ notice() }}</p>
         }
 
         <video
@@ -142,9 +147,13 @@ export class CameraDialog {
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
   private readonly video = viewChild<ElementRef<HTMLVideoElement>>('video');
   private stream: MediaStream | null = null;
-  protected readonly cameras = signal<{ id: string; label: string }[]>([]);
+  protected readonly cameras = signal<CameraInfo[]>([]);
   /** The device id of the open camera. */
   protected readonly cameraId = signal('');
+  /** True while a camera switch runs. */
+  protected readonly switching = signal(false);
+  /** A short note about the last switch. */
+  protected readonly notice = signal('');
 
   constructor() {
     effect(() => {
@@ -239,46 +248,51 @@ export class CameraDialog {
     this.closed.emit();
   }
 
-  /** Open another camera, such as the ultra wide lens. This browser remembers it. */
+  /**
+   * Open another camera, such as the ultra wide lens. This browser remembers it. When
+   * the camera does not open, the dialog reopens the one the user had.
+   */
   protected async switchCamera(deviceId: string): Promise<void> {
-    if (!deviceId || deviceId === this.cameraId()) {
+    const previous = this.cameraId();
+
+    if (!deviceId || deviceId === previous || this.switching()) {
       return;
     }
 
-    remember(deviceId);
+    this.switching.set(true);
+    this.notice.set('');
     this.stop();
-    await this.start(deviceId);
+
+    try {
+      await this.start(deviceId, false);
+      rememberCamera(deviceId);
+    } catch {
+      this.notice.set('That camera did not open. The camera you had is back.');
+      await this.start(previous).catch(() => undefined);
+    } finally {
+      this.switching.set(false);
+    }
   }
 
   /**
-   * Open the camera. With no device id, the dialog tries the camera from the last visit,
-   * then the default rear camera.
+   * Open the camera. With no device id, use the camera from the last visit. With
+   * `fallback` false, a camera that does not open throws, for the switch to handle.
    */
-  private async start(deviceId = recall()): Promise<void> {
+  private async start(deviceId?: string, fallback = true): Promise<void> {
     this.error.set('');
     this.ready.set(false);
 
-    if (!navigator.mediaDevices?.getUserMedia) {
+    if (!hasLiveCamera()) {
       this.error.set('This browser cannot show a live camera.');
       return;
     }
 
-    const size = { width: { ideal: 1920 }, height: { ideal: 1080 } };
     let stream: MediaStream;
-
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: deviceId
-          ? { deviceId: { exact: deviceId }, ...size }
-          : { facingMode: { ideal: 'environment' }, ...size },
-        audio: false,
-      });
-    } catch {
-      // The remembered camera can be gone, for example on another phone. Try the
-      // default rear camera before giving up.
-      if (deviceId) {
-        remember('');
-        return this.start('');
+      stream = await openCamera(deviceId, fallback);
+    } catch (error) {
+      if (!fallback) {
+        throw error;
       }
       this.error.set(
         'The camera did not open. Allow the camera for this site, or use the one-photo camera.',
@@ -288,13 +302,14 @@ export class CameraDialog {
 
     // The user can close the dialog while the browser asks for the camera.
     if (!this.open()) {
-      stream.getTracks().forEach((track) => track.stop());
+      closeCamera(stream);
       return;
     }
 
     this.stream = stream;
-    this.cameraId.set(stream.getVideoTracks()[0]?.getSettings().deviceId ?? '');
-    await this.listCameras();
+    this.cameraId.set(cameraIdOf(stream));
+    await prepareCamera(stream);
+    this.cameras.set(await listCameras());
 
     const video = this.video()?.nativeElement;
     if (video) {
@@ -308,27 +323,8 @@ export class CameraDialog {
     }
   }
 
-  /**
-   * The cameras of this device. The browser gives their names only after the user allows
-   * the camera, so the list fills after the first start.
-   */
-  private async listCameras(): Promise<void> {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const cameras = devices
-        .filter((device) => device.kind === 'videoinput' && device.deviceId)
-        .map((device, index) => ({
-          id: device.deviceId,
-          label: device.label || `Camera ${index + 1}`,
-        }));
-      this.cameras.set(cameras);
-    } catch {
-      this.cameras.set([]);
-    }
-  }
-
   private stop(): void {
-    this.stream?.getTracks().forEach((track) => track.stop());
+    closeCamera(this.stream);
     this.stream = null;
     this.ready.set(false);
 
@@ -343,28 +339,5 @@ export class CameraDialog {
       URL.revokeObjectURL(shot.url);
     }
     this.shots.set([]);
-  }
-}
-
-/** The key for the camera from the last visit. It is a convenience for this browser only. */
-const CAMERA_KEY = 'gold-buyer.camera';
-
-function recall(): string {
-  try {
-    return localStorage.getItem(CAMERA_KEY) ?? '';
-  } catch {
-    return '';
-  }
-}
-
-function remember(deviceId: string): void {
-  try {
-    if (deviceId) {
-      localStorage.setItem(CAMERA_KEY, deviceId);
-    } else {
-      localStorage.removeItem(CAMERA_KEY);
-    }
-  } catch {
-    // Storage can be blocked. The dialog then opens the default camera each time.
   }
 }

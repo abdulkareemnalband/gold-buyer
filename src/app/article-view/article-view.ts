@@ -10,11 +10,11 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
-import { BarcodeReader, NO_BARCODE } from '../core/barcode-reader';
+import { ScanDialog } from '../scan-dialog/scan-dialog';
 import { GoldStore } from '../core/gold-store';
 import { computeArticle } from '../core/gold-math';
 import { ImageStore } from '../core/image-store';
-import { Article, METAL_NAMES } from '../core/models';
+import { Article, Barcode, METAL_NAMES } from '../core/models';
 import { GramsPipe, InrPipe } from '../core/inr-pipe';
 import { PhotoViewer } from '../photo-viewer/photo-viewer';
 import { BarcodeImage } from '../barcode-image/barcode-image';
@@ -29,7 +29,7 @@ import { formatDay } from '../core/dates';
 @Component({
   selector: 'app-article-view',
   host: { '(document:click)': 'onDocumentClick($event)' },
-  imports: [InrPipe, GramsPipe, PhotoViewer, BarcodeImage, CameraDialog],
+  imports: [InrPipe, GramsPipe, PhotoViewer, BarcodeImage, CameraDialog, ScanDialog],
   template: `
     <article class="card p-3" [attr.aria-labelledby]="'view-title-' + article().id">
       <div class="flex items-start gap-2">
@@ -109,12 +109,7 @@ import { formatDay } from '../core/dates';
               >
                 Add photo from files
               </button>
-              <button
-                type="button"
-                role="menuitem"
-                [class]="menuItemClass"
-                (click)="pickPhoto(scanInput)"
-              >
+              <button type="button" role="menuitem" [class]="menuItemClass" (click)="openScan()">
                 Scan barcode
               </button>
               <button type="button" role="menuitem" [class]="menuItemClass" (click)="onDuplicate()">
@@ -152,19 +147,8 @@ import { formatDay } from '../core/dates';
         (closed)="cameraOpen.set(false)"
       />
 
-      <!-- The menu opens these. They stay outside the menu, so their change event still
-           arrives after the menu closes. A desktop browser ignores capture and opens
-           the file picker. -->
-      <input
-        #scanInput
-        class="sr-only"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        tabindex="-1"
-        aria-hidden="true"
-        (change)="scanBarcode($event)"
-      />
+      <!-- The menu opens this. It stays outside the menu, so its change event still
+           arrives after the menu closes. -->
       <input
         #fileInput
         class="sr-only"
@@ -176,12 +160,12 @@ import { formatDay } from '../core/dates';
         (change)="addPhotos($event)"
       />
 
-      @if (scanning()) {
-        <p class="muted mt-2 text-xs" role="status">Reading the barcode…</p>
-      }
-      @if (scanError()) {
-        <p class="mt-2 text-xs text-rose-700 dark:text-rose-400" role="alert">{{ scanError() }}</p>
-      }
+      <app-scan-dialog
+        [open]="scanOpen()"
+        [label]="name()"
+        (scanned)="onScanned($event)"
+        (closed)="scanOpen.set(false)"
+      />
       @if (saving()) {
         <p class="muted mt-2 text-xs" role="status">Saving the photo…</p>
       }
@@ -302,9 +286,7 @@ export class ArticleView {
   /** True while this card saves a photo. The photo store counts for every card. */
   protected readonly saving = signal(false);
   protected readonly cameraOpen = signal(false);
-  protected readonly barcodes = inject(BarcodeReader);
-  protected readonly scanning = signal(false);
-  protected readonly scanError = signal('');
+  protected readonly scanOpen = signal(false);
   /** True while the card asks the user to confirm a delete. */
   protected readonly confirmingDelete = signal(false);
   private readonly keepButton = viewChild<ElementRef<HTMLButtonElement>>('keepButton');
@@ -396,30 +378,14 @@ export class ArticleView {
     input.click();
   }
 
-  /** Read the barcode from the camera photo and save it. The photo is not kept. */
-  protected async scanBarcode(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const photo = input.files?.[0];
-    input.value = '';
+  protected openScan(): void {
+    this.menuOpen.set(false);
+    this.scanOpen.set(true);
+  }
 
-    if (!photo) {
-      return;
-    }
-
-    this.scanning.set(true);
-    this.scanError.set('');
-    try {
-      const scanned = await this.barcodes.read(photo);
-      if (scanned) {
-        this.store.patchArticle(this.article().id, { barcode: scanned });
-      } else {
-        this.scanError.set(NO_BARCODE);
-      }
-    } catch {
-      this.scanError.set(NO_BARCODE);
-    } finally {
-      this.scanning.set(false);
-    }
+  /** The live scan read a barcode. Save it with its format. */
+  protected onScanned(barcode: Barcode): void {
+    this.store.patchArticle(this.article().id, { barcode });
   }
 
   protected openCamera(): void {

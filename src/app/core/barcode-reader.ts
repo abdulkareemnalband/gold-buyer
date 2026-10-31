@@ -80,14 +80,101 @@ const MATRIX_FORMATS = new Set([
  */
 const READ_SIZES = [1600, 1000, 2400];
 
+/** A rectangle inside an image, as fractions of its width and height. */
+export interface Area {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const FULL_AREA: Area = { x: 0, y: 0, width: 1, height: 1 };
+
+/**
+ * The guide box in the middle of the camera view. The reader looks inside it first, so a
+ * price tag or another code beside the barcode does not get in the way.
+ *
+ * A tall frame gets a wide, low box, which fits a 1D barcode and a QR code. A wide frame
+ * gets a box that is taller, so a QR code still fits.
+ */
+export function guideArea(width: number, height: number): Area {
+  return height >= width
+    ? { x: 0.1, y: 0.3, width: 0.8, height: 0.4 }
+    : { x: 0.2, y: 0.15, width: 0.6, height: 0.7 };
+}
+
+interface Decoders {
+  zxing: typeof import('@zxing/library');
+  hints: Map<number, unknown>;
+  readers: { decode(image: unknown, hints: unknown): ZxingResult; reset(): void }[];
+}
+
+interface ZxingResult {
+  getText(): string;
+  getBarcodeFormat(): number;
+}
+
 @Service()
 export class BarcodeReader {
-  /** The first barcode in the photo, or null when the photo shows none. */
+  private decoders: Promise<Decoders> | undefined;
+
+  /**
+   * The first barcode in the photo, or null when the photo shows none. The reader looks
+   * in the middle of the photo first, then in the whole photo.
+   */
   async read(photo: Blob): Promise<Barcode | null> {
-    const zxing = await import('@zxing/library');
     const bitmap = await createImageBitmap(photo);
 
     try {
+      for (const area of [guideArea(bitmap.width, bitmap.height), FULL_AREA]) {
+        for (const size of READ_SIZES) {
+          const barcode = await this.readArea(bitmap, bitmap.width, bitmap.height, area, size);
+          if (barcode) {
+            return barcode;
+          }
+        }
+      }
+      return null;
+    } finally {
+      bitmap.close();
+    }
+  }
+
+  /**
+   * Read one area of an image source, such as a video frame. The area is drawn at most
+   * `size` pixels on its longest side. A smaller size reads faster, which matters for a
+   * live camera that reads several frames each second.
+   */
+  async readArea(
+    source: CanvasImageSource,
+    sourceWidth: number,
+    sourceHeight: number,
+    area: Area,
+    size: number,
+  ): Promise<Barcode | null> {
+    const { zxing, hints, readers } = await this.load();
+    const { pixels, width, height } = grayscale(source, sourceWidth, sourceHeight, area, size);
+    const image = new zxing.BinaryBitmap(
+      new zxing.HybridBinarizer(new zxing.RGBLuminanceSource(pixels, width, height)),
+    );
+
+    for (const reader of readers) {
+      try {
+        const result = reader.decode(image, hints);
+        const name = zxing.BarcodeFormat[result.getBarcodeFormat()];
+        return { data: result.getText(), type: FORMATS[name] ?? DEFAULT_BARCODE_TYPE };
+      } catch {
+        // A reader throws when it finds no code of its format. Try the next one.
+      } finally {
+        reader.reset();
+      }
+    }
+    return null;
+  }
+
+  /** Load the library once, and make the readers once. */
+  private load(): Promise<Decoders> {
+    this.decoders ??= import('@zxing/library').then((zxing) => {
       const hints = new Map<number, unknown>([[zxing.DecodeHintType.TRY_HARDER, true]]);
 
       // The same readers, in the same order, as `MultiFormatReader`. The app calls them
@@ -103,27 +190,9 @@ export class BarcodeReader {
         new zxing.MaxiCodeReader(),
       ];
 
-      for (const size of READ_SIZES) {
-        const { pixels, width, height } = grayscale(bitmap, size);
-        const source = new zxing.RGBLuminanceSource(pixels, width, height);
-        const image = new zxing.BinaryBitmap(new zxing.HybridBinarizer(source));
-
-        for (const reader of readers) {
-          try {
-            const result = reader.decode(image, hints);
-            const name = zxing.BarcodeFormat[result.getBarcodeFormat()];
-            return { data: result.getText(), type: FORMATS[name] ?? DEFAULT_BARCODE_TYPE };
-          } catch {
-            // A reader throws when it finds no code of its format. Try the next one.
-          } finally {
-            reader.reset();
-          }
-        }
-      }
-      return null;
-    } finally {
-      bitmap.close();
-    }
+      return { zxing, hints, readers };
+    });
+    return this.decoders;
   }
 
   /**
@@ -162,18 +231,32 @@ export class BarcodeReader {
   }
 }
 
-/** Draw the photo at most `size` pixels on its longest side, and keep one byte per pixel. */
-function grayscale(bitmap: ImageBitmap, size: number) {
-  const scale = Math.min(1, size / Math.max(bitmap.width, bitmap.height));
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
+/**
+ * Draw one area of the source at most `size` pixels on its longest side, and keep one byte
+ * per pixel.
+ */
+function grayscale(
+  source: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+  area: Area,
+  size: number,
+) {
+  const sx = Math.round(area.x * sourceWidth);
+  const sy = Math.round(area.y * sourceHeight);
+  const sw = Math.max(1, Math.round(area.width * sourceWidth));
+  const sh = Math.max(1, Math.round(area.height * sourceHeight));
+
+  const scale = Math.min(1, size / Math.max(sw, sh));
+  const width = Math.max(1, Math.round(sw * scale));
+  const height = Math.max(1, Math.round(sh * scale));
 
   const canvas = new OffscreenCanvas(width, height);
   const context = canvas.getContext('2d', { willReadFrequently: true });
   if (!context) {
     throw new Error('No 2D canvas.');
   }
-  context.drawImage(bitmap, 0, 0, width, height);
+  context.drawImage(source, sx, sy, sw, sh, 0, 0, width, height);
 
   const rgba = context.getImageData(0, 0, width, height).data;
   const pixels = new Uint8ClampedArray(width * height);

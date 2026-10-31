@@ -416,22 +416,12 @@
       <button
         type="button"
         class="btn-quiet shrink-0"
+        aria-haspopup="dialog"
         [attr.aria-label]="'Scan the barcode of ' + name()"
-        [disabled]="scanning()"
-        (click)="scanInput.click()"
+        (click)="scanOpen.set(true)"
       >
-        {{ scanning() ? 'Reading…' : 'Scan' }}
+        Scan
       </button>
-      <input
-        #scanInput
-        class="sr-only"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        tabindex="-1"
-        aria-hidden="true"
-        (change)="scan($event)"
-      />
     </div>
     <div class="mt-2">
       <label class="label" [attr.for]="'barcode-type-' + id()">Format</label>
@@ -441,9 +431,12 @@
         }
       </select>
     </div>
-    @if (scanError()) {
-      <p class="mt-1 text-xs text-rose-700 dark:text-rose-400" role="alert">{{ scanError() }}</p>
-    }
+    <app-scan-dialog
+      [open]="scanOpen()"
+      [label]="name()"
+      (scanned)="onScanned($event)"
+      (closed)="scanOpen.set(false)"
+    />
     @if (model().barcode.data.trim()) {
       <app-barcode-image class="mt-2" [barcode]="model().barcode" [label]="name()" />
     }
